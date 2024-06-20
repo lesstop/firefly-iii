@@ -25,7 +25,6 @@ declare(strict_types=1);
 namespace FireflyIII\Validation\Account;
 
 use FireflyIII\Models\Account;
-use Log;
 
 /**
  * Trait ReconciliationValidation
@@ -35,11 +34,6 @@ trait ReconciliationValidation
     public ?Account $destination;
     public ?Account $source;
 
-    /**
-     * @param  array  $array
-     *
-     * @return bool
-     */
     protected function validateReconciliationDestination(array $array): bool
     {
         $accountId   = array_key_exists('id', $array) ? $array['id'] : null;
@@ -53,28 +47,25 @@ trait ReconciliationValidation
         }
 
         // after that, search for it expecting an asset account or a liability.
-        Log::debug('Now in validateReconciliationDestination', $array);
+        app('log')->debug('Now in validateReconciliationDestination', $array);
 
         // source can be any of the following types.
-        $validTypes = array_keys($this->combinations[$this->transactionType]);
-        $search     = $this->findExistingAccount($validTypes, $array);
+        $validTypes  = array_keys($this->combinations[$this->transactionType]);
+        $search      = $this->findExistingAccount($validTypes, $array);
         if (null === $search) {
             $this->sourceError = (string)trans('validation.reconciliation_source_bad_data', ['id' => $accountId, 'name' => $accountName]);
             app('log')->warning('Not a valid source. Cant find it.', $validTypes);
 
             return false;
         }
-        $this->source = $search;
-        Log::debug('Valid source account!');
+        $this->setSource($search);
+        app('log')->debug('Valid source account!');
 
         return true;
     }
 
     /**
      * Basically the same check
-     * @param  array  $array
-     *
-     * @return bool
      */
     protected function validateReconciliationSource(array $array): bool
     {
@@ -84,25 +75,26 @@ trait ReconciliationValidation
         // is expected to be "positive", i.e. the money flows from the
         // source to the asset account that is the destination.
         if (null === $accountId && null === $accountName) {
-            Log::debug('The source is valid because ID and name are NULL.');
-            $this->source = new Account();
+            app('log')->debug('The source is valid because ID and name are NULL.');
+            $this->setSource(new Account());
+
             return true;
         }
 
         // after that, search for it expecting an asset account or a liability.
-        Log::debug('Now in validateReconciliationSource', $array);
+        app('log')->debug('Now in validateReconciliationSource', $array);
 
         // source can be any of the following types.
-        $validTypes = array_keys($this->combinations[$this->transactionType]);
-        $search     = $this->findExistingAccount($validTypes, $array);
+        $validTypes  = array_keys($this->combinations[$this->transactionType]);
+        $search      = $this->findExistingAccount($validTypes, $array);
         if (null === $search) {
             $this->sourceError = (string)trans('validation.reconciliation_source_bad_data', ['id' => $accountId, 'name' => $accountName]);
             app('log')->warning('Not a valid source. Cant find it.', $validTypes);
 
             return false;
         }
-        $this->source = $search;
-        Log::debug('Valid source account!');
+        $this->setSource($search);
+        app('log')->debug('Valid source account!');
 
         return true;
     }

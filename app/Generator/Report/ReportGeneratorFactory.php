@@ -28,19 +28,11 @@ use FireflyIII\Exceptions\FireflyException;
 
 /**
  * Class ReportGeneratorFactory.
- *
- * @codeCoverageIgnore
  */
 class ReportGeneratorFactory
 {
     /**
      * Static report generator class.
-     *
-     * @param  string  $type
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     *
-     * @return ReportGeneratorInterface
      *
      * @throws FireflyException
      */
@@ -48,16 +40,16 @@ class ReportGeneratorFactory
     {
         $period = 'Month';
         // more than two months date difference means year report.
-        if ($start->diffInMonths($end) > 1) {
+        if ($start->diffInMonths($end, true) > 1) {
             $period = 'Year';
         }
 
-        // more than one year date difference means multi year report.
-        if ($start->diffInMonths($end) > 12) {
+        // more than one year date difference means multi-year report.
+        if ($start->diffInMonths($end, true) > 12) {
             $period = 'MultiYear';
         }
 
-        $class = sprintf('FireflyIII\Generator\Report\%s\%sReportGenerator', $type, $period);
+        $class  = sprintf('FireflyIII\Generator\Report\%s\%sReportGenerator', $type, $period);
         if (class_exists($class)) {
             /** @var ReportGeneratorInterface $obj */
             $obj = app($class);
@@ -66,6 +58,7 @@ class ReportGeneratorFactory
 
             return $obj;
         }
+
         throw new FireflyException(sprintf('Cannot generate report. There is no "%s"-report for period "%s".', $type, $period));
     }
 }

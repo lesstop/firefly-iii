@@ -27,7 +27,6 @@ namespace FireflyIII\Api\V2\Controllers\Model\Budget;
 use FireflyIII\Api\V2\Controllers\Controller;
 use FireflyIII\Api\V2\Request\Generic\DateRequest;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
-use FireflyIII\Support\Http\Api\ConvertsExchangeRates;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -35,46 +34,41 @@ use Illuminate\Http\JsonResponse;
  */
 class SumController extends Controller
 {
-    use ConvertsExchangeRates;
-
     private BudgetRepositoryInterface $repository;
 
-    /**
-     *
-     */
     public function __construct()
     {
+        parent::__construct();
         $this->middleware(
             function ($request, $next) {
                 $this->repository = app(BudgetRepositoryInterface::class);
+
                 return $next($request);
             }
         );
     }
 
     /**
-     * @param  DateRequest  $request
-     * @return JsonResponse
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v2)#/budgets/getBudgetedForBudget
      */
     public function budgeted(DateRequest $request): JsonResponse
     {
-        $data      = $request->getAll();
-        $result    = $this->repository->budgetedInPeriod($data['start'], $data['end']);
-        $converted = $this->cerSum(array_values($result));
+        $data   = $request->getAll();
+        $result = $this->repository->budgetedInPeriod($data['start'], $data['end']);
 
-        return response()->json($converted);
+        return response()->json($result);
     }
 
     /**
-     * @param  DateRequest  $request
-     * @return JsonResponse
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v2)#/budgets/getSpentForBudget
      */
     public function spent(DateRequest $request): JsonResponse
     {
-        $data      = $request->getAll();
-        $result    = $this->repository->spentInPeriod($data['start'], $data['end']);
-        $converted = $this->cerSum(array_values($result));
+        $data   = $request->getAll();
+        $result = $this->repository->spentInPeriod($data['start'], $data['end']);
 
-        return response()->json($converted);
+        return response()->json($result);
     }
 }

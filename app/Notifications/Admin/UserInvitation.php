@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\Admin;
 
 use FireflyIII\Models\InvitedUser;
+use FireflyIII\Support\Notifications\UrlValidator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
@@ -41,8 +42,6 @@ class UserInvitation extends Notification
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(InvitedUser $invitee)
     {
@@ -52,34 +51,43 @@ class UserInvitation extends Notification
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return MailMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toMail($notifiable)
     {
         return (new MailMessage())
             ->markdown('emails.invitation-created', ['email' => $this->invitee->user->email, 'invitee' => $this->invitee->email])
-            ->subject((string)trans('email.invitation_created_subject'));
+            ->subject((string)trans('email.invitation_created_subject'))
+        ;
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return SlackMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toSlack($notifiable)
     {
@@ -91,11 +99,19 @@ class UserInvitation extends Notification
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function via($notifiable)
     {
-        return ['mail', 'slack'];
+        $slackUrl = app('fireflyconfig')->get('slack_webhook_url', '')->data;
+        if (UrlValidator::isValidWebhookURL($slackUrl)) {
+            return ['mail', 'slack'];
+        }
+
+        return ['mail'];
     }
 }

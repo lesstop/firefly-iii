@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -33,10 +34,8 @@ class CreateLocalPersonalAccessTokensTable extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
         Schema::dropIfExists('personal_access_tokens');
     }
@@ -44,20 +43,25 @@ class CreateLocalPersonalAccessTokensTable extends Migration
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
-    public function up()
+    public function up(): void
     {
         if (!Schema::hasTable('personal_access_tokens')) {
-            Schema::create('personal_access_tokens', function (Blueprint $table) {
-                $table->bigIncrements('id');
-                $table->morphs('tokenable');
-                $table->string('name');
-                $table->string('token', 64)->unique();
-                $table->text('abilities')->nullable();
-                $table->timestamp('last_used_at')->nullable();
-                $table->timestamps();
-            });
+            try {
+                Schema::create('personal_access_tokens', static function (Blueprint $table): void {
+                    $table->bigIncrements('id');
+                    $table->morphs('tokenable');
+                    $table->string('name');
+                    $table->string('token', 64)->unique();
+                    $table->text('abilities')->nullable();
+                    $table->timestamp('last_used_at')->nullable();
+                    $table->timestamps();
+                });
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not create table "personal_access_tokens": %s', $e->getMessage()));
+                app('log')->error('If this table exists already (see the error message), this is not a problem. Other errors? Please open a discussion on GitHub.');
+            }
         }
     }
 }

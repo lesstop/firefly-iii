@@ -1,21 +1,29 @@
-name: Lock old issues
+name: 'Issues - Lock old issues'
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 2 * * *'
+
+concurrency:
+  group: lock-threads
 
 permissions:
-  contents: read
+  issues: write
+  pull-requests: write
+  discussions: write
 
 jobs:
   lock:
     permissions:
-      issues: write  # for dessant/lock-threads to lock issues
-      pull-requests: write  # for dessant/lock-threads to lock PRs
+      issues: write
+      pull-requests: write
+      discussions: write
     runs-on: ubuntu-latest
     steps:
-      - uses: dessant/lock-threads@v2
+      - uses: dessant/lock-threads@v5
         with:
-          github-token: ${{ github.token }}
-          issue-lock-inactive-days: '90'
+          issue-inactive-days: 21
+          pr-inactive-days: 21
+          discussion-inactive-days: 21
+          log-output: true

@@ -24,7 +24,6 @@ declare(strict_types=1);
 namespace FireflyIII\Support\Chart\Budget;
 
 use Carbon\Carbon;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Repositories\Budget\BudgetLimitRepositoryInterface;
@@ -44,7 +43,6 @@ class FrontpageChartGenerator
     private Carbon                          $end;
     private string                          $monthAndDayFormat;
     private Carbon                          $start;
-    private User                            $user;
 
     /**
      * FrontpageChartGenerator constructor.
@@ -84,11 +82,6 @@ class FrontpageChartGenerator
      * For each budget, gets all budget limits for the current time range.
      * When no limits are present, the time range is used to collect information on money spent.
      * If limits are present, each limit is processed individually.
-     *
-     * @param  array  $data
-     * @param  Budget  $budget
-     *
-     * @return array
      */
     private function processBudget(array $data, Budget $budget): array
     {
@@ -106,15 +99,11 @@ class FrontpageChartGenerator
     /**
      * When no limits are present, the expenses of the whole period are collected and grouped.
      * This is grouped per currency. Because there is no limit set, "left to spend" and "overspent" are empty.
-     *
-     * @param  array  $data
-     * @param  Budget  $budget
-     *
-     * @return array
      */
     private function noBudgetLimits(array $data, Budget $budget): array
     {
         $spent = $this->opsRepository->sumExpenses($this->start, $this->end, null, new Collection([$budget]));
+
         /** @var array $entry */
         foreach ($spent as $entry) {
             $title                      = sprintf('%s (%s)', $budget->name, $entry['currency_name']);
@@ -128,12 +117,6 @@ class FrontpageChartGenerator
 
     /**
      * If a budget has budget limit, each limit is processed individually.
-     *
-     * @param  array  $data
-     * @param  Budget  $budget
-     * @param  Collection  $limits
-     *
-     * @return array
      */
     private function budgetLimits(array $data, Budget $budget, Collection $limits): array
     {
@@ -146,21 +129,17 @@ class FrontpageChartGenerator
     }
 
     /**
-     * For each limit, the expenses from the time range of the limit are collected. Each row from the result is processed individually.
-     *
-     * @param  array  $data
-     * @param  Budget  $budget
-     * @param  BudgetLimit  $limit
-     *
-     * @return array
+     * For each limit, the expenses from the time range of the limit are collected. Each row from the result is
+     * processed individually.
      */
     private function processLimit(array $data, Budget $budget, BudgetLimit $limit): array
     {
         $spent = $this->opsRepository->sumExpenses($limit->start_date, $limit->end_date, null, new Collection([$budget]), $limit->transactionCurrency);
+
         /** @var array $entry */
         foreach ($spent as $entry) {
             // only spent the entry where the entry's currency matches the budget limit's currency
-            if ($entry['currency_id'] === (int)$limit->transaction_currency_id) {
+            if ($entry['currency_id'] === $limit->transaction_currency_id) {
                 $data = $this->processRow($data, $budget, $limit, $entry);
             }
         }
@@ -171,19 +150,12 @@ class FrontpageChartGenerator
     /**
      * Each row of expenses from a budget limit is in another currency (note $entry['currency_name']).
      *
-     * Each one is added to the $data array. If the limit's date range is different from the global $start and $end dates,
-     * for example when a limit only partially falls into this month, the title is expanded to clarify.
-     *
-     * @param  array  $data
-     * @param  Budget  $budget
-     * @param  BudgetLimit  $limit
-     * @param  array  $entry
-     *
-     * @return array
+     * Each one is added to the $data array. If the limit's date range is different from the global $start and $end
+     * dates, for example when a limit only partially falls into this month, the title is expanded to clarify.
      */
     private function processRow(array $data, Budget $budget, BudgetLimit $limit, array $entry): array
     {
-        $title = sprintf('%s (%s)', $budget->name, $entry['currency_name']);
+        $title                      = sprintf('%s (%s)', $budget->name, $entry['currency_name']);
         if ($limit->start_date->startOfDay()->ne($this->start->startOfDay()) || $limit->end_date->startOfDay()->ne($this->end->startOfDay())) {
             $title = sprintf(
                 '%s (%s) (%s - %s)',
@@ -193,7 +165,7 @@ class FrontpageChartGenerator
                 $limit->end_date->isoFormat($this->monthAndDayFormat)
             );
         }
-        $sumSpent = bcmul($entry['sum'], '-1'); // spent
+        $sumSpent                   = bcmul($entry['sum'], '-1'); // spent
 
         $data[0]['entries'][$title] = 1 === bccomp($sumSpent, $limit->amount) ? $limit->amount : $sumSpent;                              // spent
         $data[1]['entries'][$title] = 1 === bccomp($limit->amount, $sumSpent) ? bcadd($entry['sum'], $limit->amount) : '0';              // left to spent
@@ -202,17 +174,11 @@ class FrontpageChartGenerator
         return $data;
     }
 
-    /**
-     * @param  Carbon  $end
-     */
     public function setEnd(Carbon $end): void
     {
         $this->end = $end;
     }
 
-    /**
-     * @param  Carbon  $start
-     */
     public function setStart(Carbon $start): void
     {
         $this->start = $start;
@@ -220,13 +186,9 @@ class FrontpageChartGenerator
 
     /**
      * A basic setter for the user. Also updates the repositories with the right user.
-     *
-     * @param  User  $user
-     * @throws FireflyException
      */
     public function setUser(User $user): void
     {
-        $this->user = $user;
         $this->budgetRepository->setUser($user);
         $this->blRepository->setUser($user);
         $this->opsRepository->setUser($user);

@@ -26,6 +26,7 @@ namespace FireflyIII\Repositories\Account;
 use Carbon\Carbon;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -37,12 +38,6 @@ interface OperationsRepositoryInterface
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
      * which have the specified accounts. It's grouped per currency, with as few details in the array
      * as possible. Amounts are always negative.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection  $accounts
-     *
-     * @return array
      */
     public function listExpenses(Carbon $start, Carbon $end, Collection $accounts): array;
 
@@ -50,143 +45,95 @@ interface OperationsRepositoryInterface
      * This method returns a list of all the deposit transaction journals (as arrays) set in that period
      * which have the specified accounts. It's grouped per currency, with as few details in the array
      * as possible. Amounts are always positive.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function listIncome(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user): void;
+    public function setUser(null|Authenticatable|User $user): void;
 
     /**
      * Sum of withdrawal journals in period for a set of accounts, grouped per currency. Amounts are always negative.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $expense
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumExpenses(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $expense = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $expense = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
-     * Sum of withdrawal journals in period for a set of accounts, grouped per destination / currency. Amounts are always negative.
+     * Sum of withdrawal journals in period for a set of accounts, grouped per destination / currency. Amounts are
+     * always negative.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $expense
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumExpensesByDestination(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $expense = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $expense = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
-     * Sum of withdrawal journals in period for a set of accounts, grouped per source / currency. Amounts are always negative.
+     * Sum of withdrawal journals in period for a set of accounts, grouped per source / currency. Amounts are always
+     * negative.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $expense
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumExpensesBySource(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $expense = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $expense = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
      * Sum of income journals in period for a set of accounts, grouped per currency. Amounts are always positive.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $revenue
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumIncome(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $revenue = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $revenue = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
-     * Sum of income journals in period for a set of accounts, grouped per destination + currency. Amounts are always positive.
+     * Sum of income journals in period for a set of accounts, grouped per destination + currency. Amounts are always
+     * positive.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $revenue
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumIncomeByDestination(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $revenue = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $revenue = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
-     * Sum of income journals in period for a set of accounts, grouped per source + currency. Amounts are always positive.
+     * Sum of income journals in period for a set of accounts, grouped per source + currency. Amounts are always
+     * positive.
      *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  Collection|null  $revenue
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function sumIncomeBySource(
-        Carbon $start,
-        Carbon $end,
-        ?Collection $accounts = null,
-        ?Collection $revenue = null,
+        Carbon               $start,
+        Carbon               $end,
+        ?Collection          $accounts = null,
+        ?Collection          $revenue = null,
         ?TransactionCurrency $currency = null
     ): array;
 
     /**
      * Sum of transfers in period for a set of accounts, grouped per currency. Amounts are always positive.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     * @param  TransactionCurrency|null  $currency
-     *
-     * @return array
      */
     public function sumTransfers(Carbon $start, Carbon $end, ?Collection $accounts = null, ?TransactionCurrency $currency = null): array;
 }

@@ -27,15 +27,12 @@ use FireflyIII\Models\Recurrence;
 use FireflyIII\Models\RecurrenceTransaction;
 
 /**
- * @codeCoverageIgnore
  * Class RecurrenceDestroyService
  */
 class RecurrenceDestroyService
 {
     /**
      * Delete recurrence by ID
-     *
-     * @param  int  $recurrenceId
      */
     public function destroyById(int $recurrenceId): void
     {
@@ -48,14 +45,12 @@ class RecurrenceDestroyService
 
     /**
      * Delete recurrence.
-     *
-     * @param  Recurrence  $recurrence
-     *
      */
     public function destroy(Recurrence $recurrence): void
     {
         // delete all meta data
         $recurrence->recurrenceMeta()->delete();
+
         // delete all transactions.
         /** @var RecurrenceTransaction $transaction */
         foreach ($recurrence->recurrenceTransactions as $transaction) {

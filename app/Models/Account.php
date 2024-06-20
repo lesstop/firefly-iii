@@ -25,6 +25,8 @@ namespace FireflyIII\Models;
 
 use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -34,6 +36,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Query\Builder;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -41,40 +44,41 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * Class Account
  *
- * @property int $id
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property \Illuminate\Support\Carbon|null $deleted_at
- * @property int $user_id
- * @property int $account_type_id
- * @property string $name
- * @property string|null $virtual_balance
- * @property string|null $iban
- * @property bool $active
- * @property bool $encrypted
- * @property int $order
- * @property-read Collection|AccountMeta[] $accountMeta
- * @property-read int|null $account_meta_count
- * @property AccountType $accountType
- * @property-read Collection|Attachment[] $attachments
- * @property-read int|null $attachments_count
- * @property-read string $account_number
- * @property-read string $edit_name
- * @property-read Collection|Location[] $locations
- * @property-read int|null $locations_count
- * @property-read Collection|Note[] $notes
- * @property-read int|null $notes_count
- * @property-read Collection|ObjectGroup[] $objectGroups
- * @property-read int|null $object_groups_count
- * @property-read Collection|PiggyBank[] $piggyBanks
- * @property-read int|null $piggy_banks_count
- * @property-read Collection|Transaction[] $transactions
- * @property-read int|null $transactions_count
- * @property-read User $user
+ * @property int                      $id
+ * @property null|Carbon              $created_at
+ * @property null|Carbon              $updated_at
+ * @property null|Carbon              $deleted_at
+ * @property int                      $user_id
+ * @property int                      $account_type_id
+ * @property string                   $name
+ * @property string                   $virtual_balance
+ * @property null|string              $iban
+ * @property bool                     $active
+ * @property bool                     $encrypted
+ * @property int                      $order
+ * @property AccountMeta[]|Collection $accountMeta
+ * @property null|int                 $account_meta_count
+ * @property AccountType              $accountType
+ * @property Attachment[]|Collection  $attachments
+ * @property null|int                 $attachments_count
+ * @property string                   $account_number
+ * @property string                   $edit_name
+ * @property Collection|Location[]    $locations
+ * @property null|int                 $locations_count
+ * @property Collection|Note[]        $notes
+ * @property null|int                 $notes_count
+ * @property Collection|ObjectGroup[] $objectGroups
+ * @property null|int                 $object_groups_count
+ * @property Collection|PiggyBank[]   $piggyBanks
+ * @property null|int                 $piggy_banks_count
+ * @property Collection|Transaction[] $transactions
+ * @property null|int                 $transactions_count
+ * @property User                     $user
+ *
  * @method static EloquentBuilder|Account accountTypeIn($types)
  * @method static EloquentBuilder|Account newModelQuery()
  * @method static EloquentBuilder|Account newQuery()
- * @method static Builder|Account onlyTrashed()
+ * @method static Builder|Account         onlyTrashed()
  * @method static EloquentBuilder|Account query()
  * @method static EloquentBuilder|Account whereAccountTypeId($value)
  * @method static EloquentBuilder|Account whereActive($value)
@@ -88,34 +92,37 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * @method static EloquentBuilder|Account whereUpdatedAt($value)
  * @method static EloquentBuilder|Account whereUserId($value)
  * @method static EloquentBuilder|Account whereVirtualBalance($value)
- * @method static Builder|Account withTrashed()
- * @method static Builder|Account withoutTrashed()
- * @mixin Eloquent
- * @property Carbon $lastActivityDate
- * @property string $startBalance
- * @property string $endBalance
- * @property string $difference
- * @property string $interest
- * @property string $interestPeriod
- * @property string $accountTypeString
+ * @method static Builder|Account         withTrashed()
+ * @method static Builder|Account         withoutTrashed()
+ *
+ * @property Carbon   $lastActivityDate
+ * @property string   $startBalance
+ * @property string   $endBalance
+ * @property string   $difference
+ * @property string   $interest
+ * @property string   $interestPeriod
+ * @property string   $accountTypeString
  * @property Location $location
- * @property string $liability_direction
- * @property string $current_debt
- * @property int|null $user_group_id
+ * @property string   $liability_direction
+ * @property string   $current_debt
+ * @property int      $user_group_id
+ *
  * @method static EloquentBuilder|Account whereUserGroupId($value)
+ *
+ * @property null|UserGroup $userGroup
+ * @property mixed          $account_id
+ *
+ * @mixin Eloquent
  */
 class Account extends Model
 {
-    use SoftDeletes;
     use HasFactory;
+    use ReturnsIntegerIdTrait;
+    use ReturnsIntegerUserIdTrait;
+    use SoftDeletes;
 
-    /**
-     * The attributes that should be casted to native types.
-     *
-     * @var array
-     */
     protected $casts
-        = [
+                                     = [
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'user_id'    => 'integer',
@@ -123,57 +130,45 @@ class Account extends Model
             'active'     => 'boolean',
             'encrypted'  => 'boolean',
         ];
-    /** @var array Fields that can be filled */
-    protected $fillable = ['user_id', 'account_type_id', 'name', 'active', 'virtual_balance', 'iban'];
-    /** @var array Hidden from view */
-    protected $hidden             = ['encrypted'];
+
+    protected $fillable              = ['user_id', 'user_group_id', 'account_type_id', 'name', 'active', 'virtual_balance', 'iban'];
+
+    protected $hidden                = ['encrypted'];
     private bool $joinedAccountTypes = false;
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
      *
-     * @param  string  $value
-     *
-     * @return Account
      * @throws NotFoundHttpException
      */
-    public static function routeBinder(string $value): Account
+    public static function routeBinder(string $value): self
     {
         if (auth()->check()) {
             $accountId = (int)$value;
+
             /** @var User $user */
-            $user = auth()->user();
-            /** @var Account $account */
-            $account = $user->accounts()->with(['accountType'])->find($accountId);
+            $user      = auth()->user();
+
+            /** @var null|Account $account */
+            $account   = $user->accounts()->with(['accountType'])->find($accountId);
             if (null !== $account) {
                 return $account;
             }
         }
+
         throw new NotFoundHttpException();
     }
 
-    /**
-     * @return BelongsTo
-     * @codeCoverageIgnore
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * @return BelongsTo
-     * @codeCoverageIgnore
-     */
     public function accountType(): BelongsTo
     {
         return $this->belongsTo(AccountType::class);
     }
 
-    /**
-     * @codeCoverageIgnore
-     * @return MorphMany
-     */
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
@@ -181,32 +176,28 @@ class Account extends Model
 
     /**
      * Get the account number.
-     *
-     * @return string
      */
     public function getAccountNumberAttribute(): string
     {
-        /** @var AccountMeta $metaValue */
+        /** @var null|AccountMeta $metaValue */
         $metaValue = $this->accountMeta()
-                          ->where('name', 'account_number')
-                          ->first();
+            ->where('name', 'account_number')
+            ->first()
+        ;
 
-        return $metaValue ? $metaValue->data : '';
+        return null !== $metaValue ? $metaValue->data : '';
     }
 
-    /**
-     * @return HasMany
-     * @codeCoverageIgnore
-     */
     public function accountMeta(): HasMany
     {
         return $this->hasMany(AccountMeta::class);
     }
 
-    /**
-     * @return string
-     * @codeCoverageIgnore
-     */
+    public function accountBalances(): HasMany
+    {
+        return $this->hasMany(AccountBalance::class);
+    }
+
     public function getEditNameAttribute(): string
     {
         $name = $this->name;
@@ -218,17 +209,12 @@ class Account extends Model
         return $name;
     }
 
-    /**
-     * @codeCoverageIgnore
-     * @return MorphMany
-     */
     public function locations(): MorphMany
     {
         return $this->morphMany(Location::class, 'locatable');
     }
 
     /**
-     * @codeCoverageIgnore
      * Get all of the notes.
      */
     public function notes(): MorphMany
@@ -237,28 +223,18 @@ class Account extends Model
     }
 
     /**
-     * Get all of the tags for the post.
+     * Get all the tags for the post.
      */
-    public function objectGroups()
+    public function objectGroups(): MorphToMany
     {
         return $this->morphToMany(ObjectGroup::class, 'object_groupable');
     }
 
-    /**
-     * @return HasMany
-     * @codeCoverageIgnore
-     */
     public function piggyBanks(): HasMany
     {
         return $this->hasMany(PiggyBank::class);
     }
 
-    /**
-     * @codeCoverageIgnore
-     *
-     * @param  EloquentBuilder  $query
-     * @param  array  $types
-     */
     public function scopeAccountTypeIn(EloquentBuilder $query, array $types): void
     {
         if (false === $this->joinedAccountTypes) {
@@ -268,40 +244,63 @@ class Account extends Model
         $query->whereIn('account_types.type', $types);
     }
 
-    /**
-     * @codeCoverageIgnore
-     *
-     * @param  mixed  $value
-     *
-     * @codeCoverageIgnore
-     */
-    public function setVirtualBalanceAttribute($value): void
+    public function setVirtualBalanceAttribute(mixed $value): void
     {
-        $value = (string)$value;
+        $value                               = (string)$value;
         if ('' === $value) {
             $value = null;
         }
         $this->attributes['virtual_balance'] = $value;
     }
 
-    /**
-     * @return HasMany
-     * @codeCoverageIgnore
-     */
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
     }
 
+    public function userGroup(): BelongsTo
+    {
+        return $this->belongsTo(UserGroup::class);
+    }
+
+    protected function accountId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
+    /**
+     * Get the user ID
+     */
+    protected function accountTypeId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
+    protected function iban(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => null === $value ? null : trim(str_replace(' ', '', (string)$value)),
+        );
+    }
+
+    protected function order(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
     /**
      * Get the virtual balance
-     *
-     * @return Attribute
      */
     protected function virtualBalance(): Attribute
     {
         return Attribute::make(
-            get: fn ($value) => (string) $value,
+            get: static fn ($value) => (string)$value,
         );
     }
 }

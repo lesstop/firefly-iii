@@ -54,16 +54,12 @@ class RuleController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/autocomplete/getRulesAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
+     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getRulesAC
      */
     public function rules(AutocompleteRequest $request): JsonResponse
     {
         $data     = $request->getData();
-        $rules    = $this->repository->searchRule($data['query'], $data['limit']);
+        $rules    = $this->repository->searchRule($data['query'], $this->parameters->get('limit'));
         $response = [];
 
         /** @var Rule $rule */

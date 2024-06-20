@@ -45,8 +45,6 @@ class ShowController extends Controller
 
     /**
      * ListController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -65,35 +63,33 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/budgets/listBudget
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/budgets/listBudget
      *
      * Display a listing of the resource.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
         // types to get, page size:
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
 
         // get list of budgets. Count it and split it.
-        $collection = $this->repository->getBudgets();
-        $count      = $collection->count();
-        $budgets    = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $collection  = $this->repository->getBudgets();
+        $count       = $collection->count();
+        $budgets     = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($budgets, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($budgets, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.budgets.index').$this->buildParams());
 
         /** @var BudgetTransformer $transformer */
         $transformer = app(BudgetTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($budgets, $transformer, 'budgets');
+        $resource    = new FractalCollection($budgets, $transformer, 'budgets');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -101,21 +97,16 @@ class ShowController extends Controller
 
     /**
      * Show a budget.
-     *
-     * @param  Budget  $budget
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
      */
     public function show(Budget $budget): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
         /** @var BudgetTransformer $transformer */
         $transformer = app(BudgetTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($budget, $transformer, 'budgets');
+        $resource    = new Item($budget, $transformer, 'budgets');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

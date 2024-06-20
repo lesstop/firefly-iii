@@ -29,9 +29,10 @@ use FireflyIII\Models\Account;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Rules\UniqueIban;
+use FireflyIII\Services\Internal\Update\AccountUpdateService;
 use FireflyIII\User;
 use Illuminate\Database\QueryException;
-use Log;
 
 /**
  * Class TransactionFactory
@@ -39,6 +40,7 @@ use Log;
 class TransactionFactory
 {
     private Account              $account;
+    private array                $accountInformation;
     private TransactionCurrency  $currency;
     private ?TransactionCurrency $foreignCurrency;
     private TransactionJournal   $journal;
@@ -46,21 +48,16 @@ class TransactionFactory
 
     /**
      * Constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
-        $this->reconciled = false;
+        $this->reconciled         = false;
+        $this->accountInformation = [];
     }
 
     /**
      * Create transaction with negative amount (for source accounts).
      *
-     * @param  string  $amount
-     * @param  string|null  $foreignAmount
-     *
-     * @return Transaction
      * @throws FireflyException
      */
     public function createNegative(string $amount, ?string $foreignAmount): Transaction
@@ -76,10 +73,6 @@ class TransactionFactory
     }
 
     /**
-     * @param  string  $amount
-     * @param  string|null  $foreignAmount
-     *
-     * @return Transaction
      * @throws FireflyException
      */
     private function create(string $amount, ?string $foreignAmount): Transaction
@@ -98,20 +91,22 @@ class TransactionFactory
             'foreign_currency_id'     => null,
             'identifier'              => 0,
         ];
+
         try {
-            /** @var Transaction|null $result */
+            /** @var null|Transaction $result */
             $result = Transaction::create($data);
         } catch (QueryException $e) {
-            Log::error(sprintf('Could not create transaction: %s', $e->getMessage()), $data);
-            Log::error($e->getMessage());
-            Log::error($e->getTraceAsString());
-            throw new FireflyException('Query exception when creating transaction.', 0, $e);
+            app('log')->error(sprintf('Could not create transaction: %s', $e->getMessage()), $data);
+            app('log')->error($e->getMessage());
+            app('log')->error($e->getTraceAsString());
+
+            throw new FireflyException(sprintf('Query exception when creating transaction: %s', $e->getMessage()), 0, $e);
         }
         if (null === $result) {
             throw new FireflyException('Transaction is NULL.');
         }
 
-        Log::debug(
+        app('log')->debug(
             sprintf(
                 'Created transaction #%d (%s %s, account %s), part of journal #%d',
                 $result->id,
@@ -123,22 +118,58 @@ class TransactionFactory
         );
 
         // do foreign currency thing: add foreign currency info to $one and $two if necessary.
-        if (null !== $this->foreignCurrency && null !== $foreignAmount && $this->foreignCurrency->id !== $this->currency->id && '' !== $foreignAmount) {
+        if (null !== $this->foreignCurrency
+            && null !== $foreignAmount
+            && $this->foreignCurrency->id !== $this->currency->id) {
             $result->foreign_currency_id = $this->foreignCurrency->id;
             $result->foreign_amount      = $foreignAmount;
         }
         $result->save();
 
+        // if present, update account with relevant account information from the array
+        $this->updateAccountInformation();
+
         return $result;
+    }
+
+    /**
+     * @throws FireflyException
+     */
+    private function updateAccountInformation(): void
+    {
+        if (!array_key_exists('iban', $this->accountInformation)) {
+            app('log')->debug('No IBAN information in array, will not update.');
+
+            return;
+        }
+        if ('' !== (string)$this->account->iban) {
+            app('log')->debug('Account already has IBAN information, will not update.');
+
+            return;
+        }
+        if ($this->account->iban === $this->accountInformation['iban']) {
+            app('log')->debug('Account already has this IBAN, will not update.');
+
+            return;
+        }
+        // validate info:
+        $validator = \Validator::make(['iban' => $this->accountInformation['iban']], [
+            'iban' => ['required', new UniqueIban($this->account, $this->account->accountType->type)],
+        ]);
+        if ($validator->fails()) {
+            app('log')->debug('Invalid or non-unique IBAN, will not update.');
+
+            return;
+        }
+
+        app('log')->debug('Will update account with IBAN information.');
+        $service   = app(AccountUpdateService::class);
+        $service->update($this->account, ['iban' => $this->accountInformation['iban']]);
     }
 
     /**
      * Create transaction with positive amount (for destination accounts).
      *
-     * @param  string  $amount
-     * @param  string|null  $foreignAmount
-     *
-     * @return Transaction
      * @throws FireflyException
      */
     public function createPositive(string $amount, ?string $foreignAmount): Transaction
@@ -153,60 +184,41 @@ class TransactionFactory
         return $this->create(app('steam')->positive($amount), $foreignAmount);
     }
 
-    /**
-     * @param  Account  $account
-     *
-     * @codeCoverageIgnore
-     */
     public function setAccount(Account $account): void
     {
         $this->account = $account;
     }
 
-    /**
-     * @param  TransactionCurrency  $currency
-     *
-     * @codeCoverageIgnore
-     */
+    public function setAccountInformation(array $accountInformation): void
+    {
+        $this->accountInformation = $accountInformation;
+    }
+
     public function setCurrency(TransactionCurrency $currency): void
     {
         $this->currency = $currency;
     }
 
     /**
-     * @param  TransactionCurrency|null  $foreignCurrency  |null
-     *
-     * @codeCoverageIgnore
+     * @param null|TransactionCurrency $foreignCurrency |null
      */
     public function setForeignCurrency(?TransactionCurrency $foreignCurrency): void
     {
         $this->foreignCurrency = $foreignCurrency;
     }
 
-    /**
-     * @param  TransactionJournal  $journal
-     *
-     * @codeCoverageIgnore
-     */
     public function setJournal(TransactionJournal $journal): void
     {
         $this->journal = $journal;
     }
 
-    /**
-     * @param  bool  $reconciled
-     *
-     * @codeCoverageIgnore
-     */
     public function setReconciled(bool $reconciled): void
     {
         $this->reconciled = $reconciled;
     }
 
     /**
-     * @param  User  $user
-     *
-     * @codeCoverageIgnore
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function setUser(User $user): void
     {

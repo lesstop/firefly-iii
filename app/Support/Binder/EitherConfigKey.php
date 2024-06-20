@@ -34,6 +34,10 @@ class EitherConfigKey
 {
     public static array $static
         = [
+            // currency conversion
+            'cer.enabled',
+
+            // firefly iii settings
             'firefly.version',
             'firefly.api_version',
             'firefly.default_location',
@@ -57,17 +61,16 @@ class EitherConfigKey
         ];
 
     /**
-     * @param  string  $value
-     * @param  Route  $route
-     *
-     * @return string
      * @throws NotFoundHttpException
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public static function routeBinder(string $value, Route $route): string
     {
         if (in_array($value, self::$static, true) || in_array($value, DynamicConfigKey::$accepted, true)) {
             return $value;
         }
+
         throw new NotFoundHttpException();
     }
 }

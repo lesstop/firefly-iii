@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\Admin;
 
+use FireflyIII\Support\Notifications\UrlValidator;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -41,8 +42,6 @@ class UserRegistration extends Notification
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(User $user)
     {
@@ -52,34 +51,43 @@ class UserRegistration extends Notification
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return MailMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toMail($notifiable)
     {
         return (new MailMessage())
             ->markdown('emails.registered-admin', ['email' => $this->user->email, 'id' => $this->user->id])
-            ->subject((string)trans('email.registered_subject_admin'));
+            ->subject((string)trans('email.registered_subject_admin'))
+        ;
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return SlackMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toSlack($notifiable)
     {
@@ -89,11 +97,19 @@ class UserRegistration extends Notification
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function via($notifiable)
     {
-        return ['mail', 'slack'];
+        $slackUrl = app('fireflyconfig')->get('slack_webhook_url', '')->data;
+        if (UrlValidator::isValidWebhookURL($slackUrl)) {
+            return ['mail', 'slack'];
+        }
+
+        return ['mail'];
     }
 }

@@ -54,16 +54,9 @@ use PragmaRX\Google2FALaravel\Middleware as MFAMiddleware;
 
 /**
  * Class Kernel
- *
- * @codeCoverageIgnore
  */
 class Kernel extends HttpKernel
 {
-    /**
-     * The application's global HTTP middleware stack.
-     *
-     * @var array
-     */
     protected $middleware
         = [
             SecureHeaders::class,
@@ -74,12 +67,15 @@ class Kernel extends HttpKernel
             TrustProxies::class,
             InstallationId::class,
         ];
-
-    /**
-     * The application's route middleware groups.
-     *
-     * @var array
-     */
+    protected $middlewareAliases
+        = [
+            'auth'       => Authenticate::class,
+            'auth.basic' => AuthenticateWithBasicAuth::class,
+            'bindings'   => Binder::class,
+            'can'        => Authorize::class,
+            'guest'      => RedirectIfAuthenticated::class,
+            'throttle'   => ThrottleRequests::class,
+        ];
     protected $middlewareGroups
         = [
             // does not check login
@@ -126,7 +122,7 @@ class Kernel extends HttpKernel
                 VerifyCsrfToken::class,
                 Binder::class,
                 Authenticate::class,
-                //RedirectIfTwoFactorAuthenticated::class,
+                // RedirectIfTwoFactorAuthenticated::class,
             ],
 
             // MUST be logged in
@@ -171,7 +167,7 @@ class Kernel extends HttpKernel
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
                 Authenticate::class,
-                //AuthenticateTwoFactor::class,
+                // AuthenticateTwoFactor::class,
                 IsAdmin::class,
                 Range::class,
                 Binder::class,
@@ -179,24 +175,18 @@ class Kernel extends HttpKernel
             ],
 
             // full API authentication
-            'api'  => [
+            'api'                   => [
                 AcceptHeaders::class,
                 EnsureFrontendRequestsAreStateful::class,
                 'auth:api,sanctum',
                 'bindings',
             ],
             // do only bindings, no auth
-            'api_basic' => [
+            'api_basic'             => [
+                AcceptHeaders::class,
                 'bindings',
             ],
         ];
-    /**
-     * The priority-sorted list of middleware.
-     *
-     * This forces non-global middleware to always be in the given order.
-     *
-     * @var array
-     */
     protected $middlewarePriority
         = [
             StartFireflySession::class,
@@ -204,21 +194,5 @@ class Kernel extends HttpKernel
             Authenticate::class,
             Binder::class,
             Authorize::class,
-        ];
-    /**
-     * The application's route middleware.
-     *
-     * These middleware may be assigned to groups or used individually.
-     *
-     * @var array
-     */
-    protected $routeMiddleware
-        = [
-            'auth'       => Authenticate::class,
-            'auth.basic' => AuthenticateWithBasicAuth::class,
-            'bindings'   => Binder::class,
-            'can'        => Authorize::class,
-            'guest'      => RedirectIfAuthenticated::class,
-            'throttle'   => ThrottleRequests::class,
         ];
 }

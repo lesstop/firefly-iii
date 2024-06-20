@@ -23,25 +23,31 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use FireflyIII\TransactionRules\Expressions\ActionExpression;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\ExpressionLanguage\SyntaxError;
 
 /**
  * FireflyIII\Models\RuleAction
  *
- * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property int $rule_id
- * @property string $action_type
- * @property string $action_value
- * @property int $order
- * @property bool $active
- * @property bool $stop_processing
- * @property-read Rule $rule
+ * @property int         $id
+ * @property null|Carbon $created_at
+ * @property null|Carbon $updated_at
+ * @property int         $rule_id
+ * @property null|string $action_type
+ * @property null|string $action_value
+ * @property int         $order
+ * @property bool        $active
+ * @property bool        $stop_processing
+ * @property Rule        $rule
+ *
  * @method static Builder|RuleAction newModelQuery()
  * @method static Builder|RuleAction newQuery()
  * @method static Builder|RuleAction query()
@@ -54,17 +60,15 @@ use Illuminate\Support\Carbon;
  * @method static Builder|RuleAction whereRuleId($value)
  * @method static Builder|RuleAction whereStopProcessing($value)
  * @method static Builder|RuleAction whereUpdatedAt($value)
+ *
  * @mixin Eloquent
  */
 class RuleAction extends Model
 {
-    /**
-     * The attributes that should be casted to native types.
-     *
-     * @var array
-     */
+    use ReturnsIntegerIdTrait;
+
     protected $casts
-        = [
+                        = [
             'created_at'      => 'datetime',
             'updated_at'      => 'datetime',
             'active'          => 'boolean',
@@ -72,15 +76,48 @@ class RuleAction extends Model
             'stop_processing' => 'boolean',
         ];
 
-    /** @var array Fields that can be filled */
     protected $fillable = ['rule_id', 'action_type', 'action_value', 'order', 'active', 'stop_processing'];
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
+    public function getValue(array $journal): string
+    {
+        if (false === config('firefly.feature_flags.expression_engine')) {
+            Log::debug('Expression engine is disabled, returning action value as string.');
+
+            return (string)$this->action_value;
+        }
+        if (true === config('firefly.feature_flags.expression_engine') && str_starts_with($this->action_value, '\=')) {
+            // return literal string.
+            return substr($this->action_value, 1);
+        }
+        $expr = new ActionExpression($this->action_value);
+
+        try {
+            $result = $expr->evaluate($journal);
+        } catch (SyntaxError $e) {
+            Log::error(sprintf('Expression engine failed to evaluate expression "%s" with error "%s".', $this->action_value, $e->getMessage()));
+            $result = (string)$this->action_value;
+        }
+        Log::debug(sprintf('Expression engine is enabled, result of expression "%s" is "%s".', $this->action_value, $result));
+
+        return $result;
+    }
+
     public function rule(): BelongsTo
     {
         return $this->belongsTo(Rule::class);
+    }
+
+    protected function order(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
+    protected function ruleId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
     }
 }

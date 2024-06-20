@@ -24,55 +24,65 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\User;
 
+use FireflyIII\Support\Notifications\UrlValidator;
+use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Class NewAccessToken
+ */
 class NewAccessToken extends Notification
 {
     use Queueable;
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
-    public function __construct()
-    {
-    }
+    public function __construct() {}
 
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return MailMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toMail($notifiable)
     {
         return (new MailMessage())
             ->markdown('emails.token-created')
-            ->subject((string)trans('email.access_token_created_subject'));
+            ->subject((string)trans('email.access_token_created_subject'))
+        ;
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return SlackMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toSlack($notifiable)
     {
@@ -82,11 +92,24 @@ class NewAccessToken extends Notification
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function via($notifiable)
     {
-        return ['mail', 'slack'];
+        /** @var null|User $user */
+        $user     = auth()->user();
+        $slackUrl = null === $user ? '' : app('preferences')->getForUser(auth()->user(), 'slack_webhook_url', '')->data;
+        if (is_array($slackUrl)) {
+            $slackUrl = '';
+        }
+        if (UrlValidator::isValidWebhookURL((string)$slackUrl)) {
+            return ['mail', 'slack'];
+        }
+
+        return ['mail'];
     }
 }

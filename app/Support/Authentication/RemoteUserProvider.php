@@ -24,43 +24,55 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Authentication;
 
+use FireflyIII\Console\Commands\Integrity\CreateGroupMemberships;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Role;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\UserProvider;
-use Log;
-use Str;
 
 /**
  * Class RemoteUserProvider
  */
 class RemoteUserProvider implements UserProvider
 {
-    /**
-     * @inheritDoc
-     */
-    public function retrieveByCredentials(array $credentials)
+    #[\Override]
+    public function rehashPasswordIfRequired(Authenticatable $user, array $credentials, bool $force = false): void
     {
-        Log::debug(sprintf('Now at %s', __METHOD__));
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+
         throw new FireflyException(sprintf('Did not implement %s', __METHOD__));
     }
 
     /**
-     * @inheritDoc
+     * @throws FireflyException
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function retrieveByCredentials(array $credentials): ?Authenticatable
+    {
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+
+        throw new FireflyException(sprintf('Did not implement %s', __METHOD__));
+    }
+
+    /**
+     * @param mixed $identifier
+     *
+     * @throws FireflyException
      */
     public function retrieveById($identifier): User
     {
-        Log::debug(sprintf('Now at %s(%s)', __METHOD__, $identifier));
+        app('log')->debug(sprintf('Now at %s(%s)', __METHOD__, $identifier));
         $user = User::where('email', $identifier)->first();
         if (null === $user) {
-            Log::debug(sprintf('User with email "%s" not found. Will be created.', $identifier));
+            app('log')->debug(sprintf('User with email "%s" not found. Will be created.', $identifier));
             $user = User::create(
                 [
                     'blocked'      => false,
                     'blocked_code' => null,
                     'email'        => $identifier,
-                    'password'     => bcrypt(Str::random(64)),
+                    'password'     => bcrypt(\Str::random(64)),
                 ]
             );
             // if this is the first user, give them admin as well.
@@ -69,35 +81,52 @@ class RemoteUserProvider implements UserProvider
                 $user->roles()->attach($roleObject);
             }
         }
-        Log::debug(sprintf('Going to return user #%d (%s)', $user->id, $user->email));
+        // make sure the user gets an administration as well.
+        CreateGroupMemberships::createGroupMembership($user);
+
+        app('log')->debug(sprintf('Going to return user #%d (%s)', $user->id, $user->email));
 
         return $user;
     }
 
     /**
-     * @inheritDoc
+     * @param mixed $identifier
+     * @param mixed $token
+     *
+     * @throws FireflyException
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
-    public function retrieveByToken($identifier, $token)
+    public function retrieveByToken($identifier, $token): ?Authenticatable
     {
-        Log::debug(sprintf('Now at %s', __METHOD__));
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+
         throw new FireflyException(sprintf('A) Did not implement %s', __METHOD__));
     }
 
     /**
-     * @inheritDoc
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
+     * @param mixed $token
+     *
+     * @throws FireflyException
      */
-    public function updateRememberToken(Authenticatable $user, $token)
+    public function updateRememberToken(Authenticatable $user, $token): void
     {
-        Log::debug(sprintf('Now at %s', __METHOD__));
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+
         throw new FireflyException(sprintf('B) Did not implement %s', __METHOD__));
     }
 
     /**
-     * @inheritDoc
+     * @throws FireflyException
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
-    public function validateCredentials(Authenticatable $user, array $credentials)
+    public function validateCredentials(Authenticatable $user, array $credentials): bool
     {
-        Log::debug(sprintf('Now at %s', __METHOD__));
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+
         throw new FireflyException(sprintf('C) Did not implement %s', __METHOD__));
     }
 }

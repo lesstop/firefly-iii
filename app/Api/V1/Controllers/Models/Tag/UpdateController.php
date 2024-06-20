@@ -41,8 +41,6 @@ class UpdateController extends Controller
 
     /**
      * TagController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -50,7 +48,7 @@ class UpdateController extends Controller
         $this->middleware(
             function ($request, $next) {
                 /** @var User $user */
-                $user = auth()->user();
+                $user             = auth()->user();
 
                 $this->repository = app(TagRepositoryInterface::class);
                 $this->repository->setUser($user);
@@ -62,24 +60,20 @@ class UpdateController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/tags/updateTag
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/tags/updateTag
      *
      * Update a rule.
-     *
-     * @param  UpdateRequest  $request
-     * @param  Tag  $tag
-     *
-     * @return JsonResponse
      */
     public function update(UpdateRequest $request, Tag $tag): JsonResponse
     {
-        $rule    = $this->repository->update($tag, $request->getAll());
-        $manager = $this->getManager();
+        $rule        = $this->repository->update($tag, $request->getAll());
+        $manager     = $this->getManager();
+
         /** @var TagTransformer $transformer */
         $transformer = app(TagTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($rule, $transformer, 'tags');
+        $resource    = new Item($rule, $transformer, 'tags');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

@@ -25,11 +25,11 @@ namespace FireflyIII\Repositories\Category;
 
 use Carbon\Carbon;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface NoCategoryRepositoryInterface
- *
  */
 interface NoCategoryRepositoryInterface
 {
@@ -37,12 +37,6 @@ interface NoCategoryRepositoryInterface
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
      * which have no category set to them. It's grouped per currency, with as few details in the array
      * as possible. Amounts are always negative.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function listExpenses(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 
@@ -50,50 +44,23 @@ interface NoCategoryRepositoryInterface
      * This method returns a list of all the deposit transaction journals (as arrays) set in that period
      * which have no category set to them. It's grouped per currency, with as few details in the array
      * as possible. Amounts are always positive.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function listIncome(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user): void;
+    public function setUser(null|Authenticatable|User $user): void;
 
     /**
      * Sum of withdrawal journals in period without a category, grouped per currency. Amounts are always negative.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function sumExpenses(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 
     /**
      * Sum of income journals in period without a category, grouped per currency. Amounts are always positive.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function sumIncome(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 
     /**
      * Sum of transfers in period without a category, grouped per currency. Amounts are always positive.
-     *
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     * @param  Collection|null  $accounts
-     *
-     * @return array
      */
     public function sumTransfers(Carbon $start, Carbon $end, ?Collection $accounts = null): array;
 }

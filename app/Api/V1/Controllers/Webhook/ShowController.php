@@ -24,9 +24,7 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Webhook;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Enums\WebhookTrigger;
 use FireflyIII\Events\RequestedSendWebhookMessages;
-use FireflyIII\Events\StoredTransactionGroup;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Generator\Webhook\MessageGeneratorInterface;
 use FireflyIII\Models\TransactionGroup;
@@ -36,21 +34,20 @@ use FireflyIII\Transformers\WebhookTransformer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 use League\Fractal\Resource\Item;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class ShowController
  */
 class ShowController extends Controller
 {
-    public const RESOURCE_KEY = 'webhooks';
+    public const string RESOURCE_KEY = 'webhooks';
     private WebhookRepositoryInterface $repository;
 
-    /**
-     * @codeCoverageIgnore
-     */
     public function __construct()
     {
         parent::__construct();
@@ -66,31 +63,36 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/listWebhook
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/listWebhook
      *
      * Display a listing of the webhooks of the user.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
-        $manager    = $this->getManager();
-        $collection = $this->repository->all();
-        $pageSize   = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
-        $count      = $collection->count();
-        $webhooks   = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->info('User tries to view all webhooks, but webhooks are DISABLED.');
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        Log::channel('audit')->info('User views all webhooks.');
+        $manager     = $this->getManager();
+        $collection  = $this->repository->all();
+        $pageSize    = $this->parameters->get('limit');
+        $count       = $collection->count();
+        $webhooks    = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($webhooks, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($webhooks, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.webhooks.index').$this->buildParams());
 
         /** @var WebhookTransformer $transformer */
         $transformer = app(WebhookTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($webhooks, $transformer, self::RESOURCE_KEY);
+        $resource    = new FractalCollection($webhooks, $transformer, self::RESOURCE_KEY);
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -98,38 +100,46 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/getWebhook
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/getWebhook
      *
      * Show single instance.
-     *
-     * @param  Webhook  $webhook
-     *
-     * @return JsonResponse
      */
     public function show(Webhook $webhook): JsonResponse
     {
-        $manager = $this->getManager();
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->info(sprintf('User tries to view webhook #%d, but webhooks are DISABLED.', $webhook->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        Log::channel('audit')->info(sprintf('User views webhook #%d.', $webhook->id));
+        $manager     = $this->getManager();
 
         /** @var WebhookTransformer $transformer */
         $transformer = app(WebhookTransformer::class);
         $transformer->setParameters($this->parameters);
-        $resource = new Item($webhook, $transformer, self::RESOURCE_KEY);
+        $resource    = new Item($webhook, $transformer, self::RESOURCE_KEY);
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/triggerWebhookTransaction
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/triggerWebhookTransaction
      *
      * This method recycles part of the code of the StoredGroupEventHandler.
-     *
-     * @param  Webhook  $webhook
-     * @param  TransactionGroup  $group
-     * @return JsonResponse
      */
     public function triggerTransaction(Webhook $webhook, TransactionGroup $group): JsonResponse
     {
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->info(sprintf('User tries to trigger webhook #%d on transaction group #%d, but webhooks are DISABLED.', $webhook->id, $group->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        app('log')->debug(sprintf('Now in triggerTransaction(%d, %d)', $webhook->id, $group->id));
+        Log::channel('audit')->info(sprintf('User triggers webhook #%d on transaction group #%d.', $webhook->id, $group->id));
+
         /** @var MessageGeneratorInterface $engine */
         $engine = app(MessageGeneratorInterface::class);
         $engine->setUser(auth()->user());
@@ -144,8 +154,9 @@ class ShowController extends Controller
         $engine->generateMessages();
 
         // trigger event to send them:
+        app('log')->debug('send event RequestedSendWebhookMessages');
         event(new RequestedSendWebhookMessages());
-        return response()->json([], 204);
 
+        return response()->json([], 204);
     }
 }

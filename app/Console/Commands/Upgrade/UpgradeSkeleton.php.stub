@@ -10,18 +10,11 @@ use Illuminate\Console\Command;
  */
 class UpgradeSkeleton extends Command
 {
-    public const CONFIG_NAME = '480_some_name';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+    public const string CONFIG_NAME = '480_some_name';
+
     protected $description = 'SOME DESCRIPTION';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+
     protected $signature = 'firefly-iii:UPGRSKELETON {--F|force : Force the execution of this command.}';
 
     /**
@@ -33,11 +26,11 @@ class UpgradeSkeleton extends Command
     {
         $start = microtime(true);
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
-        $this->warn('Congrats, you found the skeleton command. Boo!');
+        $this->friendlyWarning('Congrats, you found the skeleton command. Boo!');
 
         //$this->markAsExecuted();
 

@@ -34,8 +34,9 @@ use FireflyIII\Transformers\AttachmentTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Resource\Item;
-use Log;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class StoreController
@@ -46,8 +47,6 @@ class StoreController extends Controller
 
     /**
      * StoreController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -67,48 +66,49 @@ class StoreController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/attachments/uploadAttachment
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/attachments/uploadAttachment
      *
      * Store a newly created resource in storage.
      *
-     * @param  StoreRequest  $request
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function store(StoreRequest $request): JsonResponse
     {
-        Log::debug(sprintf('Now in %s', __METHOD__));
-        $data       = $request->getAll();
-        $attachment = $this->repository->store($data);
-        $manager    = $this->getManager();
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
+        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        $data        = $request->getAll();
+        $attachment  = $this->repository->store($data);
+        $manager     = $this->getManager();
 
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($attachment, $transformer, 'attachments');
+        $resource    = new Item($attachment, $transformer, 'attachments');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }
 
     /**
      * Upload an attachment.
-     *
-     * @codeCoverageIgnore
-     *
-     * @param  Request  $request
-     * @param  Attachment  $attachment
-     *
-     * @return JsonResponse
      */
     public function upload(Request $request, Attachment $attachment): JsonResponse
     {
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
+
         /** @var AttachmentHelperInterface $helper */
         $helper = app(AttachmentHelperInterface::class);
         $body   = $request->getContent();
         if ('' === $body) {
-            Log::error('Body of attachment is empty.');
+            app('log')->error('Body of attachment is empty.');
 
             return response()->json([], 422);
         }

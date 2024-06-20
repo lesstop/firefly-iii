@@ -28,6 +28,7 @@ use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Models\RuleTrigger;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -35,165 +36,61 @@ use Illuminate\Support\Collection;
  */
 interface RuleRepositoryInterface
 {
-    /**
-     * @return int
-     */
     public function count(): int;
 
-    /**
-     * @param  Rule  $rule
-     *
-     * @return bool
-     */
     public function destroy(Rule $rule): bool;
 
-    /**
-     * @param  Rule  $rule
-     *
-     * @return Rule
-     */
     public function duplicate(Rule $rule): Rule;
 
-    /**
-     * @param  int  $ruleId
-     *
-     * @return Rule|null
-     */
     public function find(int $ruleId): ?Rule;
 
     /**
      * Get all the users rules.
-     *
-     * @return Collection
      */
     public function getAll(): Collection;
 
-    /**
-     * @return RuleGroup
-     */
     public function getFirstRuleGroup(): RuleGroup;
 
-    /**
-     * @param  RuleGroup  $ruleGroup
-     *
-     * @return int
-     */
     public function getHighestOrderInRuleGroup(RuleGroup $ruleGroup): int;
 
-    /**
-     * @param  Rule  $rule
-     *
-     * @return string
-     */
     public function getPrimaryTrigger(Rule $rule): string;
 
-    /**
-     * @param  Rule  $rule
-     *
-     * @return Collection
-     */
     public function getRuleActions(Rule $rule): Collection;
 
-    /**
-     * @param  Rule  $rule
-     *
-     * @return Collection
-     */
     public function getRuleTriggers(Rule $rule): Collection;
 
     /**
      * Return search query for rule.
-     *
-     * @param  Rule  $rule
-     *
-     * @return string
      */
     public function getSearchQuery(Rule $rule): string;
 
     /**
      * Get all the users rules that trigger on storage.
-     *
-     * @return Collection
      */
     public function getStoreRules(): Collection;
 
     /**
      * Get all the users rules that trigger on update.
-     *
-     * @return Collection
      */
     public function getUpdateRules(): Collection;
 
-    /**
-     * @param  RuleGroup  $ruleGroup
-     *
-     * @return int
-     */
     public function maxOrder(RuleGroup $ruleGroup): int;
 
-    /**
-     * @param  Rule  $rule
-     * @param  RuleGroup  $ruleGroup
-     * @param  int  $order
-     *
-     * @return Rule
-     */
     public function moveRule(Rule $rule, RuleGroup $ruleGroup, int $order): Rule;
 
-    /**
-     * @param  RuleGroup  $ruleGroup
-     *
-     * @return bool
-     */
     public function resetRuleOrder(RuleGroup $ruleGroup): bool;
 
-    /**
-     * @param  string  $query
-     * @param  int  $limit
-     *
-     * @return Collection
-     */
     public function searchRule(string $query, int $limit): Collection;
 
-    /**
-     * @param  Rule  $rule
-     * @param  int  $newOrder
-     */
     public function setOrder(Rule $rule, int $newOrder): void;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user);
+    public function setUser(null|Authenticatable|User $user): void;
 
-    /**
-     * @param  array  $data
-     *
-     * @return Rule
-     */
     public function store(array $data): Rule;
 
-    /**
-     * @param  Rule  $rule
-     * @param  array  $values
-     *
-     * @return RuleAction
-     */
     public function storeAction(Rule $rule, array $values): RuleAction;
 
-    /**
-     * @param  Rule  $rule
-     * @param  array  $values
-     *
-     * @return RuleTrigger
-     */
     public function storeTrigger(Rule $rule, array $values): RuleTrigger;
 
-    /**
-     * @param  Rule  $rule
-     * @param  array  $data
-     *
-     * @return Rule
-     */
     public function update(Rule $rule, array $data): Rule;
 }

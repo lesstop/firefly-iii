@@ -26,11 +26,11 @@ namespace FireflyIII\Http\Requests;
 use Carbon\Carbon;
 use FireflyIII\Support\Request\ChecksLogin;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Validator;
 
 /**
  * Class SelectTransactionsRequest.
- *
- * @codeCoverageIgnore
  */
 class SelectTransactionsRequest extends FormRequest
 {
@@ -38,8 +38,6 @@ class SelectTransactionsRequest extends FormRequest
 
     /**
      * Rules for this request.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -47,7 +45,7 @@ class SelectTransactionsRequest extends FormRequest
         /** @var Carbon $sessionFirst */
         $sessionFirst = clone session('first');
         $first        = $sessionFirst->subDay()->format('Y-m-d');
-        $today        = Carbon::now()->addDay()->format('Y-m-d');
+        $today        = today(config('app.timezone'))->addDay()->format('Y-m-d');
 
         return [
             'start'      => 'required|date|after:'.$first,
@@ -55,5 +53,12 @@ class SelectTransactionsRequest extends FormRequest
             'accounts'   => 'required',
             'accounts.*' => 'required|exists:accounts,id|belongsToUser:accounts',
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 }

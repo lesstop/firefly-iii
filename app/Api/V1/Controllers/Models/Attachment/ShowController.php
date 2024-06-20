@@ -33,9 +33,11 @@ use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response as LaravelResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 use League\Fractal\Resource\Item;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class ShowController
@@ -46,8 +48,6 @@ class ShowController extends Controller
 
     /**
      * ShowController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -67,18 +67,19 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/attachments/downloadAttachment
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/attachments/downloadAttachment
      *
      * Download an attachment.
      *
-     * @param  Attachment  $attachment
-     *
-     * @codeCoverageIgnore
-     * @return LaravelResponse
-     * @throws   FireflyException
+     * @throws FireflyException
      */
     public function download(Attachment $attachment): LaravelResponse
     {
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
         if (false === $attachment->uploaded) {
             throw new FireflyException('200000: File has not been uploaded (yet).');
         }
@@ -86,11 +87,11 @@ class ShowController extends Controller
             throw new FireflyException('200000: File has not been uploaded (yet).');
         }
         if ($this->repository->exists($attachment)) {
-            $content = $this->repository->getContent($attachment);
+            $content  = $this->repository->getContent($attachment);
             if ('' === $content) {
                 throw new FireflyException('200002: File is empty (zero bytes).');
             }
-            $quoted = sprintf('"%s"', addcslashes(basename($attachment->filename), '"\\'));
+            $quoted   = sprintf('"%s"', addcslashes(basename($attachment->filename), '"\\'));
 
             /** @var LaravelResponse $response */
             $response = response($content);
@@ -103,29 +104,35 @@ class ShowController extends Controller
                 ->header('Expires', '0')
                 ->header('Cache-Control', 'must-revalidate, post-check=0, pre-check=0')
                 ->header('Pragma', 'public')
-                ->header('Content-Length', (string)strlen($content));
+                ->header('Content-Length', (string)strlen($content))
+            ;
 
             return $response;
         }
+
         throw new FireflyException('200003: File does not exist.');
     }
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/attachments/listAttachment
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/attachments/listAttachment
      *
      * Display a listing of the resource.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
-        $manager = $this->getManager();
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
+
+        $manager     = $this->getManager();
 
         // types to get, page size:
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
 
         // get list of attachments. Count it and split it.
         $collection  = $this->repository->get();
@@ -133,14 +140,14 @@ class ShowController extends Controller
         $attachments = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($attachments, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($attachments, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.attachments.index').$this->buildParams());
 
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($attachments, $transformer, 'attachments');
+        $resource    = new FractalCollection($attachments, $transformer, 'attachments');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -148,22 +155,24 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/attachments/getAttachment
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/attachments/getAttachment
      *
      * Display the specified resource.
-     *
-     * @param  Attachment  $attachment
-     *
-     * @return JsonResponse
      */
     public function show(Attachment $attachment): JsonResponse
     {
-        $manager = $this->getManager();
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
+        $manager     = $this->getManager();
+
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($attachment, $transformer, 'attachments');
+        $resource    = new Item($attachment, $transformer, 'attachments');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

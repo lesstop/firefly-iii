@@ -29,9 +29,6 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Support\Binder\EitherConfigKey;
 use Illuminate\Http\JsonResponse;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ConfigurationController
@@ -57,9 +54,8 @@ class ConfigurationController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/configuration/getConfiguration
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/configuration/getConfiguration
      *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function index(): JsonResponse
@@ -67,8 +63,9 @@ class ConfigurationController extends Controller
         try {
             $dynamicData = $this->getDynamicConfiguration();
         } catch (FireflyException $e) {
-            Log::error($e->getMessage());
-            Log::error($e->getTraceAsString());
+            app('log')->error($e->getMessage());
+            app('log')->error($e->getTraceAsString());
+
             throw new FireflyException('200030: Could not load config variables.', 0, $e);
         }
         $staticData = $this->getStaticConfiguration();
@@ -93,11 +90,6 @@ class ConfigurationController extends Controller
 
     /**
      * Get all config values.
-     *
-     * @return array
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     private function getDynamicConfiguration(): array
     {
@@ -114,9 +106,6 @@ class ConfigurationController extends Controller
         ];
     }
 
-    /**
-     * @return array
-     */
     private function getStaticConfiguration(): array
     {
         $list   = EitherConfigKey::$static;
@@ -130,12 +119,7 @@ class ConfigurationController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/configuration/getSingleConfiguration
-     *
-     * @param  string  $configKey
-     *
-     * @return JsonResponse
-     * @throws FireflyException
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/configuration/getSingleConfiguration
      */
     public function show(string $configKey): JsonResponse
     {
@@ -162,20 +146,18 @@ class ConfigurationController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/configuration/setConfiguration
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/configuration/setConfiguration
      *
      * Update the configuration.
      *
-     * @param  UpdateRequest  $request
-     * @param  string  $name
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function update(UpdateRequest $request, string $name): JsonResponse
     {
+        $rules     = ['value' => 'required'];
         if (!$this->repository->hasRole(auth()->user(), 'owner')) {
-            throw new FireflyException('200005: You need the "owner" role to do this.');
+            $messages = ['value' => '200005: You need the "owner" role to do this.'];
+            \Validator::make([], $rules, $messages)->validate();
         }
         $data      = $request->getAll();
         $shortName = str_replace('configuration.', '', $name);

@@ -28,6 +28,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Class TransactionCreation
+ */
 class TransactionCreation extends Notification
 {
     use Queueable;
@@ -36,8 +39,6 @@ class TransactionCreation extends Notification
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(array $collection)
     {
@@ -47,34 +48,43 @@ class TransactionCreation extends Notification
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return MailMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toMail($notifiable)
     {
         return (new MailMessage())
             ->markdown('emails.report-new-journals', ['transformed' => $this->collection])
-            ->subject((string)trans_choice('email.new_journals_subject', count($this->collection)));
+            ->subject(trans_choice('email.new_journals_subject', count($this->collection)))
+        ;
     }
 
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function via($notifiable)
     {

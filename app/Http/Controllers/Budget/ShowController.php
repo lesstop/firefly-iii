@@ -37,26 +37,20 @@ use FireflyIII\Support\Http\Controllers\PeriodOverview;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use JsonException;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
- *
  * Class ShowController
  */
 class ShowController extends Controller
 {
-    use PeriodOverview;
     use AugumentData;
+    use PeriodOverview;
 
     protected JournalRepositoryInterface $journalRepos;
     private BudgetRepositoryInterface    $repository;
 
     /**
      * ShowController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -77,23 +71,17 @@ class ShowController extends Controller
     /**
      * Show transactions without a budget.
      *
-     * @param  Request  $request
-     * @param  Carbon|null  $start
-     * @param  Carbon|null  $end
-     *
      * @return Factory|View
+     *
      * @throws FireflyException
-     * @throws JsonException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
-    public function noBudget(Request $request, Carbon $start = null, Carbon $end = null)
+    public function noBudget(Request $request, ?Carbon $start = null, ?Carbon $end = null)
     {
-        /** @var Carbon $start */
-        $start = $start ?? session('start');
-        /** @var Carbon $end */
-        $end      = $end ?? session('end');
-        $subTitle = trans(
+        // @var Carbon $start
+        $start ??= session('start');
+        // @var Carbon $end
+        $end   ??= session('end');
+        $subTitle  = trans(
             'firefly.without_budget_between',
             ['start' => $start->isoFormat($this->monthAndDayFormat), 'end' => $end->isoFormat($this->monthAndDayFormat)]
         );
@@ -108,8 +96,9 @@ class ShowController extends Controller
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setRange($start, $end)->setTypes([TransactionType::WITHDRAWAL])->setLimit($pageSize)->setPage($page)
-                  ->withoutBudget()->withAccountInformation()->withCategoryInformation();
-        $groups = $collector->getPaginatedGroups();
+            ->withoutBudget()->withAccountInformation()->withCategoryInformation()
+        ;
+        $groups    = $collector->getPaginatedGroups();
         $groups->setPath(route('budgets.no-budget'));
 
         return view('budgets.no-budget', compact('groups', 'subTitle', 'periods', 'start', 'end'));
@@ -118,27 +107,23 @@ class ShowController extends Controller
     /**
      * Shows ALL transactions without a budget.
      *
-     * @param  Request  $request
-     *
      * @return Factory|View
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function noBudgetAll(Request $request)
     {
-        $subTitle = (string)trans('firefly.all_journals_without_budget');
-        $first    = $this->journalRepos->firstNull();
-        $start    = null === $first ? new Carbon() : $first->date;
-        $end      = today(config('app.timezone'));
-        $page     = (int)$request->get('page');
-        $pageSize = (int)app('preferences')->get('listPageSize', 50)->data;
+        $subTitle  = (string)trans('firefly.all_journals_without_budget');
+        $first     = $this->journalRepos->firstNull();
+        $start     = null === $first ? new Carbon() : $first->date;
+        $end       = today(config('app.timezone'));
+        $page      = (int)$request->get('page');
+        $pageSize  = (int)app('preferences')->get('listPageSize', 50)->data;
 
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setRange($start, $end)->setTypes([TransactionType::WITHDRAWAL])->setLimit($pageSize)->setPage($page)
-                  ->withoutBudget()->withAccountInformation()->withCategoryInformation();
-        $groups = $collector->getPaginatedGroups();
+            ->withoutBudget()->withAccountInformation()->withCategoryInformation()
+        ;
+        $groups    = $collector->getPaginatedGroups();
         $groups->setPath(route('budgets.no-budget-all'));
 
         return view('budgets.no-budget', compact('groups', 'subTitle', 'start', 'end'));
@@ -147,19 +132,12 @@ class ShowController extends Controller
     /**
      * Show a single budget.
      *
-     * @param  Request  $request
-     * @param  Budget  $budget
-     *
      * @return Factory|View
-     * @throws FireflyException
-     * @throws JsonException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function show(Request $request, Budget $budget)
     {
         /** @var Carbon $allStart */
-        $allStart    = session('first', Carbon::now()->startOfYear());
+        $allStart    = session('first', today(config('app.timezone'))->startOfYear());
         $allEnd      = today();
         $page        = (int)$request->get('page');
         $pageSize    = (int)app('preferences')->get('listPageSize', 50)->data;
@@ -169,14 +147,15 @@ class ShowController extends Controller
 
         // collector:
         /** @var GroupCollectorInterface $collector */
-        $collector = app(GroupCollectorInterface::class);
+        $collector   = app(GroupCollectorInterface::class);
         $collector->setRange($allStart, $allEnd)->setBudget($budget)
-                  ->withAccountInformation()
-                  ->setLimit($pageSize)->setPage($page)->withBudgetInformation()->withCategoryInformation();
-        $groups = $collector->getPaginatedGroups();
+            ->withAccountInformation()
+            ->setLimit($pageSize)->setPage($page)->withBudgetInformation()->withCategoryInformation()
+        ;
+        $groups      = $collector->getPaginatedGroups();
         $groups->setPath(route('budgets.show', [$budget->id]));
 
-        $subTitle = (string)trans('firefly.all_journals_for_budget', ['name' => $budget->name]);
+        $subTitle    = (string)trans('firefly.all_journals_for_budget', ['name' => $budget->name]);
 
         return view('budgets.show', compact('limits', 'attachments', 'budget', 'repetition', 'groups', 'subTitle'));
     }
@@ -184,15 +163,9 @@ class ShowController extends Controller
     /**
      * Show a single budget by a budget limit.
      *
-     * @param  Request  $request
-     * @param  Budget  $budget
-     * @param  BudgetLimit  $budgetLimit
-     *
      * @return Factory|View
+     *
      * @throws FireflyException
-     * @throws JsonException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function showByBudgetLimit(Request $request, Budget $budget, BudgetLimit $budgetLimit)
     {
@@ -200,9 +173,9 @@ class ShowController extends Controller
             throw new FireflyException('This budget limit is not part of this budget.');
         }
 
-        $page     = (int)$request->get('page');
-        $pageSize = (int)app('preferences')->get('listPageSize', 50)->data;
-        $subTitle = trans(
+        $page        = (int)$request->get('page');
+        $pageSize    = (int)app('preferences')->get('listPageSize', 50)->data;
+        $subTitle    = trans(
             'firefly.budget_in_period',
             [
                 'name'     => $budget->name,
@@ -214,14 +187,16 @@ class ShowController extends Controller
 
         // collector:
         /** @var GroupCollectorInterface $collector */
-        $collector = app(GroupCollectorInterface::class);
+        $collector   = app(GroupCollectorInterface::class);
 
         $collector->setRange($budgetLimit->start_date, $budgetLimit->end_date)->withAccountInformation()
-                  ->setBudget($budget)->setLimit($pageSize)->setPage($page)->withBudgetInformation()->withCategoryInformation();
-        $groups = $collector->getPaginatedGroups();
-        $groups->setPath(route('budgets.show', [$budget->id, $budgetLimit->id]));
+            ->setBudget($budget)->setLimit($pageSize)->setPage($page)->withBudgetInformation()->withCategoryInformation()
+        ;
+        $groups      = $collector->getPaginatedGroups();
+        $groups->setPath(route('budgets.show.limit', [$budget->id, $budgetLimit->id]));
+
         /** @var Carbon $start */
-        $start       = session('first', Carbon::now()->startOfYear());
+        $start       = session('first', today(config('app.timezone'))->startOfYear());
         $end         = today(config('app.timezone'));
         $attachments = $this->repository->getAttachments($budget);
         $limits      = $this->getLimits($budget, $start, $end);

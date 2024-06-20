@@ -20,6 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Ignore this comment
+
 declare(strict_types=1);
 
 return [
@@ -31,7 +33,7 @@ return [
     'fatal_error'             => 'There was a fatal error. Please check the log files in "storage/logs" or use "docker logs -f [container]" to see what\'s going on.',
     'maintenance_mode'        => 'Firefly III is in maintenance mode.',
     'be_right_back'           => 'Be right back!',
-    'check_back'              => 'Firefly III is down for some necessary maintenance. Please check back in a second.',
+    'check_back'              => 'Firefly III is down for some necessary maintenance. Please check back in a second. If you happen to see this message on the demo site, just wait a few minutes. The database is reset every few hours.',
     'error_occurred'          => 'Whoops! An error occurred.',
     'db_error_occurred'       => 'Whoops! A database error occurred.',
     'error_not_recoverable'   => 'Unfortunately, this error was not recoverable :(. Firefly III broke. The error is:',
@@ -39,8 +41,11 @@ return [
     'error_location'          => 'This error occured in file <span style="font-family: monospace;">:file</span> on line :line with code :code.',
     'stacktrace'              => 'Stack trace',
     'more_info'               => 'More information',
+
+    // Ignore this comment
+
     'collect_info'            => 'Please collect more information in the <code>storage/logs</code> directory where you will find log files. If you\'re running Docker, use <code>docker logs -f [container]</code>.',
-    'collect_info_more'       => 'You can read more about collecting error information in <a href="https://docs.firefly-iii.org/faq/other#how-do-i-enable-debug-mode">the FAQ</a>.',
+    'collect_info_more'       => 'You can read more about collecting error information in <a href="https://docs.firefly-iii.org/how-to/general/debug/">the FAQ</a>.',
     'github_help'             => 'Get help on GitHub',
     'github_instructions'     => 'You\'re more than welcome to open a new issue <strong><a href="https://github.com/firefly-iii/firefly-iii/issues">on GitHub</a></strong>.',
     'use_search'              => 'Use the search!',
@@ -51,5 +56,4 @@ return [
     'offline_header'          => 'You are probably offline',
     'offline_unreachable'     => 'Firefly III is unreachable. Your device is currently offline or the server is not working.',
     'offline_github'          => 'If you are sure both your device and the server are online, please open a ticket on <strong><a href="https://github.com/firefly-iii/firefly-iii/issues">GitHub</a></strong>.',
-
 ];

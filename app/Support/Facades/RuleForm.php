@@ -26,16 +26,12 @@ namespace FireflyIII\Support\Facades;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @codeCoverageIgnore
  * Class RuleForm.
- *
  */
 class RuleForm extends Facade
 {
     /**
      * Get the registered name of the component.
-     *
-     * @return string
      */
     protected static function getFacadeAccessor(): string
     {

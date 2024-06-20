@@ -23,7 +23,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Category;
 
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
@@ -32,8 +31,6 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class IndexController
@@ -45,8 +42,6 @@ class IndexController extends Controller
 
     /**
      * CategoryController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -66,12 +61,7 @@ class IndexController extends Controller
     /**
      * Show all categories.
      *
-     * @param  Request  $request
-     *
      * @return Factory|View
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function index(Request $request)
     {
@@ -82,7 +72,7 @@ class IndexController extends Controller
         $collection = $collection->slice(($page - 1) * $pageSize, $pageSize);
 
         $collection->each(
-            function (Category $category) {
+            function (Category $category): void {
                 $category->lastActivity = $this->repository->lastUseDate($category, new Collection());
             }
         );

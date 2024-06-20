@@ -23,30 +23,34 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Class CurrencyExchangeRate
  *
- * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property string|null $deleted_at
- * @property int $user_id
- * @property int $from_currency_id
- * @property int $to_currency_id
- * @property Carbon $date
- * @property string $rate
- * @property string|null $user_rate
- * @property-read TransactionCurrency $fromCurrency
- * @property-read TransactionCurrency $toCurrency
- * @property-read User $user
+ * @property int                 $id
+ * @property null|Carbon         $created_at
+ * @property null|Carbon         $updated_at
+ * @property null|string         $deleted_at
+ * @property int                 $user_id
+ * @property int                 $from_currency_id
+ * @property int                 $to_currency_id
+ * @property Carbon              $date
+ * @property string              $rate
+ * @property string              $user_rate
+ * @property TransactionCurrency $fromCurrency
+ * @property TransactionCurrency $toCurrency
+ * @property User                $user
+ *
  * @method static Builder|CurrencyExchangeRate newModelQuery()
  * @method static Builder|CurrencyExchangeRate newQuery()
  * @method static Builder|CurrencyExchangeRate query()
@@ -60,13 +64,22 @@ use Illuminate\Support\Carbon;
  * @method static Builder|CurrencyExchangeRate whereUpdatedAt($value)
  * @method static Builder|CurrencyExchangeRate whereUserId($value)
  * @method static Builder|CurrencyExchangeRate whereUserRate($value)
- * @mixin Eloquent
- * @property int|null $user_group_id
+ *
+ * @property int $user_group_id
+ *
  * @method static Builder|CurrencyExchangeRate whereUserGroupId($value)
+ * @method static Builder|CurrencyExchangeRate onlyTrashed()
+ * @method static Builder|CurrencyExchangeRate withTrashed()
+ * @method static Builder|CurrencyExchangeRate withoutTrashed()
+ *
+ * @mixin Eloquent
  */
 class CurrencyExchangeRate extends Model
 {
-    /** @var array Convert these fields to other data types */
+    use ReturnsIntegerIdTrait;
+    use ReturnsIntegerUserIdTrait;
+    use SoftDeletes;
+
     protected $casts
                         = [
             'created_at'       => 'datetime',
@@ -78,50 +91,46 @@ class CurrencyExchangeRate extends Model
         ];
     protected $fillable = ['user_id', 'from_currency_id', 'to_currency_id', 'date', 'rate'];
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
     public function fromCurrency(): BelongsTo
     {
         return $this->belongsTo(TransactionCurrency::class, 'from_currency_id');
     }
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
     public function toCurrency(): BelongsTo
     {
         return $this->belongsTo(TransactionCurrency::class, 'to_currency_id');
     }
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * @return Attribute
-     */
-    protected function rate(): Attribute
+    protected function fromCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: fn ($value) => (string) $value,
+            get: static fn ($value) => (int)$value,
         );
     }
 
-    /**
-     * @return Attribute
-     */
+    protected function rate(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (string)$value,
+        );
+    }
+
+    protected function toCurrencyId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
     protected function userRate(): Attribute
     {
         return Attribute::make(
-            get: fn ($value) => (string) $value,
+            get: static fn ($value) => (string)$value,
         );
     }
 }

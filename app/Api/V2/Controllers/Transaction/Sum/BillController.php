@@ -2,7 +2,7 @@
 
 /*
  * BillController.php
- * Copyright (c) 2022 james@firefly-iii.org
+ * Copyright (c) 2023 james@firefly-iii.org
  *
  * This file is part of Firefly III (https://github.com/firefly-iii).
  *
@@ -29,6 +29,4 @@ use FireflyIII\Api\V2\Controllers\Controller;
 /**
  * Class BillController
  */
-class BillController extends Controller
-{
-}
+class BillController extends Controller {}

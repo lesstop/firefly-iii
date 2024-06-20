@@ -34,13 +34,10 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
- *
  * Class CreateController
  */
 class CreateController extends Controller
@@ -52,8 +49,6 @@ class CreateController extends Controller
 
     /**
      * CreateController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -75,9 +70,6 @@ class CreateController extends Controller
 
     /**
      * Create a new account.
-     *
-     * @param  Request  $request
-     * @param  string  $objectType
      *
      * @return Factory|View
      */
@@ -103,7 +95,7 @@ class CreateController extends Controller
         ];
 
         // interest calculation periods:
-        $interestPeriods = [
+        $interestPeriods     = [
             'daily'   => (string)trans('firefly.interest_calc_daily'),
             'monthly' => (string)trans('firefly.interest_calc_monthly'),
             'yearly'  => (string)trans('firefly.interest_calc_yearly'),
@@ -117,6 +109,11 @@ class CreateController extends Controller
                 'include_net_worth' => $hasOldInput ? (bool)$request->old('include_net_worth') : true,
             ]
         );
+        // issue #8321
+        $showNetWorth        = true;
+        if ('liabilities' !== $objectType && 'asset' !== $objectType) {
+            $showNetWorth = false;
+        }
 
         // put previous url in session if not redirect from store (not "create another").
         if (true !== session('accounts.create.fromStore')) {
@@ -127,43 +124,44 @@ class CreateController extends Controller
 
         return view(
             'accounts.create',
-            compact('subTitleIcon', 'liabilityDirections', 'locations', 'objectType', 'interestPeriods', 'subTitle', 'roles', 'liabilityTypes')
+            compact('subTitleIcon', 'liabilityDirections', 'showNetWorth', 'locations', 'objectType', 'interestPeriods', 'subTitle', 'roles', 'liabilityTypes')
         );
     }
 
     /**
      * Store the new account.
      *
-     * @param  AccountFormRequest  $request
+     * @return Redirector|RedirectResponse
      *
-     * @return RedirectResponse|Redirector
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function store(AccountFormRequest $request)
     {
-        $data    = $request->getAccountData();
-        $account = $this->repository->store($data);
+        $data      = $request->getAccountData();
+        $account   = $this->repository->store($data);
         $request->session()->flash('success', (string)trans('firefly.stored_new_account', ['name' => $account->name]));
         app('preferences')->mark();
 
         Log::channel('audit')->info('Stored new account.', $data);
 
         // update preferences if necessary:
-        $frontPage = app('preferences')->get('frontPageAccounts', [])->data;
+        $frontpage = app('preferences')->get('frontpageAccounts', [])->data;
+        if (!is_array($frontpage)) {
+            $frontpage = [];
+        }
         if (AccountType::ASSET === $account->accountType->type) {
-            $frontPage[] = $account->id;
-            app('preferences')->set('frontPageAccounts', $frontPage);
+            $frontpage[] = $account->id;
+            app('preferences')->set('frontpageAccounts', $frontpage);
         }
 
         // store attachment(s):
-        /** @var array $files */
-        $files = $request->hasFile('attachments') ? $request->file('attachments') : null;
+        /** @var null|array $files */
+        $files     = $request->hasFile('attachments') ? $request->file('attachments') : null;
         if (null !== $files && !auth()->user()->hasRole('demo')) {
             $this->attachments->saveAttachmentsForModel($account, $files);
         }
         if (null !== $files && auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('The demo user is trying to upload attachments in %s.', __METHOD__));
             session()->flash('info', (string)trans('firefly.no_att_demo_user'));
         }
 
@@ -172,7 +170,7 @@ class CreateController extends Controller
         }
 
         // redirect to previous URL.
-        $redirect = redirect($this->getPreviousUrl('accounts.create.url'));
+        $redirect  = redirect($this->getPreviousUrl('accounts.create.url'));
         if (1 === (int)$request->get('create_another')) {
             // set value so create routine will not overwrite URL:
             $request->session()->put('accounts.create.fromStore', true);

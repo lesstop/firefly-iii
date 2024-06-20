@@ -146,12 +146,12 @@
                                                     <div class="col-sm-10">
                                                         <div class="checkbox">
                                                             <label>
-                                                                {% if id in frontPageAccounts.data or frontPageAccounts.data|length == 0 %}
-                                                                    <input type="checkbox" name="frontPageAccounts[]"
+                                                                {% if id in frontpageAccounts or frontpageAccounts|length == 0 %}
+                                                                    <input type="checkbox" name="frontpageAccounts[]"
                                                                            value="{{ id }}"
                                                                            checked> {{ name }}
                                                                 {% else %}
-                                                                    <input type="checkbox" name="frontPageAccounts[]"
+                                                                    <input type="checkbox" name="frontpageAccounts[]"
                                                                            value="{{ id }}"> {{ name }}
                                                                 {% endif %}
                                                             </label>
@@ -196,8 +196,30 @@
                                         <div class="radio">
                                             <label>
                                                 <input type="radio" name="viewRange"
+                                                       value="last7" {% if viewRange == 'last7' %} checked {% endif %}>
+                                                {{ 'pref_last7'|_ }}
+                                            </label>
+                                        </div>
+
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
                                                        value="1M" {% if viewRange == '1M' %} checked {% endif %}>
                                                 {{ 'pref_1M'|_ }}
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="last30" {% if viewRange == 'last30' %} checked {% endif %}>
+                                                {{ 'pref_last30'|_ }}
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="MTD" {% if viewRange == 'MTD' %} checked {% endif %}>
+                                                {{ 'pref_MTD'|_ }}
                                             </label>
                                         </div>
 
@@ -206,6 +228,20 @@
                                                 <input type="radio" name="viewRange"
                                                        value="3M" {% if viewRange == '3M' %} checked {% endif %}>
                                                 {{ 'pref_3M'|_ }}
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="last90" {% if viewRange == 'last90' %} checked {% endif %}>
+                                                {{ 'pref_last90'|_ }}
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="QTD" {% if viewRange == 'QTD' %} checked {% endif %}>
+                                                {{ 'pref_QTD'|_ }}
                                             </label>
                                         </div>
 
@@ -223,6 +259,20 @@
                                                 {{ 'pref_1Y'|_ }}
                                             </label>
                                         </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="YTD" {% if viewRange == 'YTD' %} checked {% endif %}>
+                                                {{ 'pref_YTD'|_ }}
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="viewRange"
+                                                       value="last365" {% if viewRange == 'last365' %} checked {% endif %}>
+                                                {{ 'pref_last365'|_ }}
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -232,6 +282,19 @@
                                         <h3>{{ 'list_page_size_title'|_ }}</h3>
                                         <p class="text-info">{{ 'list_page_size_help'|_ }}</p>
                                         {{ ExpandedForm.integer('listPageSize',listPageSize,{'label' : 'list_page_size_label'|_}) }}
+                                    </div>
+                                    <div class="preferences-box">
+                                        <h3>{{ 'dark_mode_preference'|_ }}</h3>
+                                        <p class="text-info">{{ 'dark_mode_preference_help'|_ }}</p>
+                                        {% for mode in availableDarkModes %}
+                                            <div class="radio">
+                                                <label>
+                                                    <input type="radio" name="darkMode"
+                                                           value="{{ mode }}" {% if darkMode == mode %} checked {% endif %}>
+                                                    {{ ('dark_mode_option_'~mode)|_ }}
+                                                </label>
+                                            </div>
+                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>
@@ -250,8 +313,8 @@
                                                 <div class="col-sm-10">
                                                     <div class="checkbox">
                                                         <label>
-                                                        <input type="checkbox" name="notification_{{ id }}" {{ enabled == true ? 'checked' : '' }} value="1">
-                                                            {{ trans('firefly.pref_notification_' ~ id)  }}
+                                                            <input type="checkbox" name="notification_{{ id }}" {{ enabled == true ? 'checked' : '' }} value="1">
+                                                            {{ trans('firefly.pref_notification_' ~ id) }}
 
                                                         </label>
                                                     </div>

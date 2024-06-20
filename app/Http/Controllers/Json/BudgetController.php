@@ -46,8 +46,6 @@ class BudgetController extends Controller
 
     /**
      * IndexController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -67,13 +65,6 @@ class BudgetController extends Controller
         );
     }
 
-    /**
-     * @param  TransactionCurrency  $currency
-     * @param  Carbon  $start
-     * @param  Carbon  $end
-     *
-     * @return JsonResponse
-     */
     public function getBudgetInformation(TransactionCurrency $currency, Carbon $start, Carbon $end): JsonResponse
     {
         $budgeted        = $this->blRepository->budgeted($start, $end, $currency);
@@ -82,8 +73,10 @@ class BudgetController extends Controller
         $percentage      = '0';
 
         if (null !== $availableBudget) {
-            $available  = $availableBudget->amount;
-            $percentage = bcmul(bcdiv($budgeted, $available), '100');
+            $available = $availableBudget->amount;
+            if (0 !== bccomp($available, '0')) {
+                $percentage = bcmul(bcdiv($budgeted, $available), '100');
+            }
         }
 
         // if available, get the AB for this period + currency, so the bar can be redrawn.

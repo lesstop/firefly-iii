@@ -94,7 +94,6 @@ function updateBudgetedAmount(e) {
             start: periodStart,
             end: periodEnd
         }).done(function (data) {
-
             input.prop('disabled', false);
             input.data('limit', data.id);
             // update amount left.
@@ -224,7 +223,6 @@ function deleteBudgetLimit(e) {
     var url = deleteBudgetLimitUrl.replace('REPLACEME', budgetLimitId.toString());
     $.post(url, {_token: token}).then(function () {
         $('.bl_entry[data-budget-limit-id="' + budgetLimitId + '"]').remove();
-
     });
     return false;
 }

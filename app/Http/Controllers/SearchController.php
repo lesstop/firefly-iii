@@ -30,8 +30,6 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Log;
-use Throwable;
 
 /**
  * Class SearchController.
@@ -58,26 +56,23 @@ class SearchController extends Controller
     /**
      * Do the search.
      *
-     * @param  Request  $request
-     * @param  SearchInterface  $searcher
-     *
      * @return Factory|View
      */
     public function index(Request $request, SearchInterface $searcher)
     {
         // search params:
-        $fullQuery = $request->get('search');
+        $fullQuery        = $request->get('search');
         if (is_array($request->get('search'))) {
             $fullQuery = '';
         }
-        $fullQuery   = (string)$fullQuery;
-        $page        = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
-        $ruleId      = (int)$request->get('rule');
-        $ruleChanged = false;
+        $fullQuery        = (string)$fullQuery;
+        $page             = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
+        $ruleId           = (int)$request->get('rule');
+        $ruleChanged      = false;
 
         // find rule, check if query is different, offer to update.
-        $ruleRepository = app(RuleRepositoryInterface::class);
-        $rule           = $ruleRepository->find($ruleId);
+        $ruleRepository   = app(RuleRepositoryInterface::class);
+        $rule             = $ruleRepository->find($ruleId);
         if (null !== $rule) {
             $originalQuery = $ruleRepository->getSearchQuery($rule);
             if ($originalQuery !== $fullQuery) {
@@ -99,15 +94,16 @@ class SearchController extends Controller
     /**
      * JSON request that does the work.
      *
-     * @param  Request  $request
-     * @param  SearchInterface  $searcher
-     *
-     * @return JsonResponse
+     * @throws FireflyException
      */
     public function search(Request $request, SearchInterface $searcher): JsonResponse
     {
-        $fullQuery = (string)$request->get('query');
-        $page      = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
+        $entry      = $request->get('query');
+        if (!is_scalar($entry)) {
+            $entry = '';
+        }
+        $fullQuery  = (string)$entry;
+        $page       = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
 
         $searcher->parseQuery($fullQuery);
 
@@ -121,9 +117,11 @@ class SearchController extends Controller
 
         try {
             $html = view('search.search', compact('groups', 'hasPages', 'searchTime'))->render();
-        } catch (Throwable $e) {
-            Log::error(sprintf('Cannot render search.search: %s', $e->getMessage()));
+        } catch (\Throwable $e) {
+            app('log')->error(sprintf('Cannot render search.search: %s', $e->getMessage()));
+            app('log')->error($e->getTraceAsString());
             $html = 'Could not render view.';
+
             throw new FireflyException($html, 0, $e);
         }
 

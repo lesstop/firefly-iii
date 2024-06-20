@@ -29,6 +29,8 @@ use FireflyIII\Models\Attachment;
 use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class DestroyController
@@ -39,8 +41,6 @@ class DestroyController extends Controller
 
     /**
      * DestroyController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -60,18 +60,18 @@ class DestroyController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/attachments/deleteAttachment
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/attachments/deleteAttachment
      *
      * Remove the specified resource from storage.
-     *
-     * @codeCoverageIgnore
-     *
-     * @param  Attachment  $attachment
-     *
-     * @return JsonResponse
      */
     public function destroy(Attachment $attachment): JsonResponse
     {
+        if (true === auth()->user()->hasRole('demo')) {
+            Log::channel('audit')->warning(sprintf('Demo user tries to access attachment API in %s', __METHOD__));
+
+            throw new NotFoundHttpException();
+        }
+
         $this->repository->destroy($attachment);
         app('preferences')->mark();
 

@@ -27,8 +27,6 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Log;
-use Throwable;
 
 /**
  * Class RuleController
@@ -38,9 +36,7 @@ class RuleController extends Controller
     /**
      * Render HTML form for rule action.
      *
-     * @param  Request  $request
-     *
-     * @return JsonResponse
+     * @throws FireflyException
      */
     public function action(Request $request): JsonResponse
     {
@@ -50,11 +46,14 @@ class RuleController extends Controller
         foreach ($keys as $key) {
             $actions[$key] = (string)trans('firefly.rule_action_'.$key.'_choice');
         }
+
         try {
             $view = view('rules.partials.action', compact('actions', 'count'))->render();
-        } catch (Throwable $e) {
-            Log::error(sprintf('Cannot render rules.partials.action: %s', $e->getMessage()));
+        } catch (\Throwable $e) {
+            app('log')->error(sprintf('Cannot render rules.partials.action: %s', $e->getMessage()));
+            app('log')->error($e->getTraceAsString());
             $view = 'Could not render view.';
+
             throw new FireflyException($view, 0, $e);
         }
 
@@ -64,9 +63,7 @@ class RuleController extends Controller
     /**
      * Render HTML for rule trigger.
      *
-     * @param  Request  $request
-     *
-     * @return JsonResponse
+     * @throws FireflyException
      */
     public function trigger(Request $request): JsonResponse
     {
@@ -82,9 +79,11 @@ class RuleController extends Controller
 
         try {
             $view = view('rules.partials.trigger', compact('triggers', 'count'))->render();
-        } catch (Throwable $e) {
-            Log::error(sprintf('Cannot render rules.partials.trigger: %s', $e->getMessage()));
+        } catch (\Throwable $e) {
+            app('log')->error(sprintf('Cannot render rules.partials.trigger: %s', $e->getMessage()));
+            app('log')->error($e->getTraceAsString());
             $view = 'Could not render view.';
+
             throw new FireflyException($view, 0, $e);
         }
 

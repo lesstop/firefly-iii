@@ -23,22 +23,19 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\User;
 
-use Carbon\Carbon;
-use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\BudgetLimit;
+use FireflyIII\Models\GroupMembership;
 use FireflyIII\Models\InvitedUser;
 use FireflyIII\Models\Role;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
-use Log;
-use Str;
 
 /**
  * Class UserRepository.
- *
  */
 class UserRepository implements UserRepositoryInterface
 {
@@ -46,17 +43,13 @@ class UserRepository implements UserRepositoryInterface
      * This updates the users email address and records some things so it can be confirmed or undone later.
      * The user is blocked until the change is confirmed.
      *
-     * @param  User  $user
-     * @param  string  $newEmail
+     * @throws \Exception
      *
-     * @return bool
-     * @throws Exception
      * @see updateEmail
-     *
      */
     public function changeEmail(User $user, string $newEmail): bool
     {
-        $oldEmail = $user->email;
+        $oldEmail           = $user->email;
 
         // save old email as pref
         app('preferences')->setForUser($user, 'previous_email_latest', $oldEmail);
@@ -75,12 +68,6 @@ class UserRepository implements UserRepositoryInterface
         return true;
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $password
-     *
-     * @return bool
-     */
     public function changePassword(User $user, string $password): bool
     {
         $user->password = bcrypt($password);
@@ -89,13 +76,6 @@ class UserRepository implements UserRepositoryInterface
         return true;
     }
 
-    /**
-     * @param  User  $user
-     * @param  bool  $isBlocked
-     * @param  string  $code
-     *
-     * @return bool
-     */
     public function changeStatus(User $user, bool $isBlocked, string $code): bool
     {
         // change blocked status and code:
@@ -106,27 +86,23 @@ class UserRepository implements UserRepositoryInterface
         return true;
     }
 
-    /**
-     * @param  string  $name
-     * @param  string  $displayName
-     * @param  string  $description
-     *
-     * @return Role
-     */
     public function createRole(string $name, string $displayName, string $description): Role
     {
         return Role::create(['name' => $name, 'display_name' => $displayName, 'description' => $description]);
     }
 
+    public function deleteInvite(InvitedUser $invite): void
+    {
+        app('log')->debug(sprintf('Deleting invite #%d', $invite->id));
+        $invite->delete();
+    }
+
     /**
-     * @param  User  $user
-     *
-     * @return bool
-     * @throws Exception
+     * @throws \Exception
      */
     public function destroy(User $user): bool
     {
-        Log::debug(sprintf('Calling delete() on user %d', $user->id));
+        app('log')->debug(sprintf('Calling delete() on user %d', $user->id));
 
         $user->groupMemberships()->delete();
         $user->delete();
@@ -135,53 +111,30 @@ class UserRepository implements UserRepositoryInterface
         return true;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function deleteEmptyGroups(): void
     {
         $groups = UserGroup::get();
+
         /** @var UserGroup $group */
         foreach ($groups as $group) {
             $count = $group->groupMemberships()->count();
             if (0 === $count) {
-                Log::info(sprintf('Deleted empty group #%d ("%s")', $group->id, $group->title));
+                app('log')->info(sprintf('Deleted empty group #%d ("%s")', $group->id, $group->title));
                 $group->delete();
             }
         }
     }
 
-    /**
-     * @return int
-     */
     public function count(): int
     {
         return $this->all()->count();
     }
 
-    /**
-     * @return Collection
-     */
     public function all(): Collection
     {
         return User::orderBy('id', 'DESC')->get(['users.*']);
     }
 
-    /**
-     * @param  int  $userId
-     *
-     * @return User|null
-     */
-    public function find(int $userId): ?User
-    {
-        return User::find($userId);
-    }
-
-    /**
-     * @param  string  $email
-     *
-     * @return User|null
-     */
     public function findByEmail(string $email): ?User
     {
         return User::where('email', $email)->first();
@@ -189,30 +142,20 @@ class UserRepository implements UserRepositoryInterface
 
     /**
      * Returns the first user in the DB. Generally only works when there is just one.
-     *
-     * @return null|User
      */
     public function first(): ?User
     {
         return User::orderBy('id', 'ASC')->first();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getInvitedUsers(): Collection
     {
         return InvitedUser::with('user')->get();
     }
 
-    /**
-     * @param  User  $user
-     *
-     * @return string|null
-     */
     public function getRoleByUser(User $user): ?string
     {
-        /** @var Role|null $role */
+        /** @var null|Role $role */
         $role = $user->roles()->first();
         if (null !== $role) {
             return $role->name;
@@ -222,18 +165,41 @@ class UserRepository implements UserRepositoryInterface
     }
 
     /**
+     * @throws FireflyException
+     */
+    public function getRolesInGroup(User $user, int $groupId): array
+    {
+        /** @var null|UserGroup $group */
+        $group       = UserGroup::find($groupId);
+        if (null === $group) {
+            throw new FireflyException(sprintf('Could not find group #%d', $groupId));
+        }
+        $memberships = $group->groupMemberships()->where('user_id', $user->id)->get();
+        $roles       = [];
+
+        /** @var GroupMembership $membership */
+        foreach ($memberships as $membership) {
+            $role    = $membership->userRole;
+            $roles[] = $role->title;
+        }
+
+        return $roles;
+    }
+
+    public function find(int $userId): ?User
+    {
+        return User::find($userId);
+    }
+
+    /**
      * Return basic user information.
-     *
-     * @param  User  $user
-     *
-     * @return array
      */
     public function getUserData(User $user): array
     {
-        $return = [];
+        $return                        = [];
 
         // two factor:
-        $return['has_2fa']             = $user->mfa_secret !== null;
+        $return['has_2fa']             = null !== $user->mfa_secret;
         $return['is_admin']            = $this->hasRole($user, 'owner');
         $return['blocked']             = 1 === (int)$user->blocked;
         $return['blocked_code']        = $user->blocked_code;
@@ -246,11 +212,12 @@ class UserRepository implements UserRepositoryInterface
         $return['categories']          = $user->categories()->count();
         $return['budgets']             = $user->budgets()->count();
         $return['budgets_with_limits'] = BudgetLimit::distinct()
-                                                    ->leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
-                                                    ->where('amount', '>', 0)
-                                                    ->whereNull('budgets.deleted_at')
-                                                    ->where('budgets.user_id', $user->id)
-                                                    ->count('budget_limits.budget_id');
+            ->leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
+            ->where('amount', '>', 0)
+            ->whereNull('budgets.deleted_at')
+            ->where('budgets.user_id', $user->id)
+            ->count('budget_limits.budget_id')
+        ;
         $return['rule_groups']         = $user->ruleGroups()->count();
         $return['rules']               = $user->rules()->count();
         $return['tags']                = $user->tags()->count();
@@ -258,34 +225,54 @@ class UserRepository implements UserRepositoryInterface
         return $return;
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $role
-     *
-     * @return bool
-     */
-    public function hasRole(User $user, string $role): bool
+    public function hasRole(null|Authenticatable|User $user, string $role): bool
     {
-        /** @var Role $userRole */
-        foreach ($user->roles as $userRole) {
-            if ($userRole->name === $role) {
-                return true;
+        if (null === $user) {
+            return false;
+        }
+        if ($user instanceof User) {
+            /** @var Role $userRole */
+            foreach ($user->roles as $userRole) {
+                if ($userRole->name === $role) {
+                    return true;
+                }
             }
         }
 
         return false;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function inviteUser(User $user, string $email): InvitedUser
+    #[\Override]
+    public function getUserGroups(User $user): Collection
     {
-        $now = Carbon::now();
+        $memberships = $user->groupMemberships()->get();
+        $set         = [];
+        $collection  = new Collection();
+
+        /** @var GroupMembership $membership */
+        foreach ($memberships as $membership) {
+            /** @var null|UserGroup $group */
+            $group = $membership->userGroup()->first();
+            if (null !== $group) {
+                $groupId       = $group->id;
+                if (in_array($groupId, array_keys($set), true)) {
+                    continue;
+                }
+                $set[$groupId] = $group;
+            }
+        }
+        $collection->push(...$set);
+
+        return $collection;
+    }
+
+    public function inviteUser(null|Authenticatable|User $user, string $email): InvitedUser
+    {
+        $now                  = today(config('app.timezone'));
         $now->addDays(2);
-        $invitee = new InvitedUser();
+        $invitee              = new InvitedUser();
         $invitee->user()->associate($user);
-        $invitee->invite_code = Str::random(64);
+        $invitee->invite_code = \Str::random(64);
         $invitee->email       = $email;
         $invitee->redeemed    = false;
         $invitee->expires     = $now;
@@ -294,13 +281,10 @@ class UserRepository implements UserRepositoryInterface
         return $invitee;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function redeemCode(string $code): void
     {
         $obj = InvitedUser::where('invite_code', $code)->where('redeemed', 0)->first();
-        if ($obj) {
+        if (null !== $obj) {
             $obj->redeemed = true;
             $obj->save();
         }
@@ -308,9 +292,6 @@ class UserRepository implements UserRepositoryInterface
 
     /**
      * Set MFA code.
-     *
-     * @param  User  $user
-     * @param  string|null  $code
      */
     public function setMFACode(User $user, ?string $code): void
     {
@@ -318,11 +299,6 @@ class UserRepository implements UserRepositoryInterface
         $user->save();
     }
 
-    /**
-     * @param  array  $data
-     *
-     * @return User
-     */
     public function store(array $data): User
     {
         $user = User::create(
@@ -330,7 +306,7 @@ class UserRepository implements UserRepositoryInterface
                 'blocked'      => $data['blocked'] ?? false,
                 'blocked_code' => $data['blocked_code'] ?? null,
                 'email'        => $data['email'],
-                'password'     => Str::random(24),
+                'password'     => \Str::random(24),
             ]
         );
         $role = $data['role'] ?? '';
@@ -341,17 +317,11 @@ class UserRepository implements UserRepositoryInterface
         return $user;
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $role
-     *
-     * @return bool
-     */
     public function attachRole(User $user, string $role): bool
     {
         $roleObject = Role::where('name', $role)->first();
         if (null === $roleObject) {
-            Log::error(sprintf('Could not find role "%s" in attachRole()', $role));
+            app('log')->error(sprintf('Could not find role "%s" in attachRole()', $role));
 
             return false;
         }
@@ -360,15 +330,12 @@ class UserRepository implements UserRepositoryInterface
             $user->roles()->attach($roleObject);
         } catch (QueryException $e) {
             // don't care
-            Log::error(sprintf('Query exception when giving user a role: %s', $e->getMessage()));
+            app('log')->error(sprintf('Query exception when giving user a role: %s', $e->getMessage()));
         }
 
         return true;
     }
 
-    /**
-     * @param  User  $user
-     */
     public function unblockUser(User $user): void
     {
         $user->blocked      = false;
@@ -379,10 +346,6 @@ class UserRepository implements UserRepositoryInterface
     /**
      * Update user info.
      *
-     * @param  User  $user
-     * @param  array  $data
-     *
-     * @return User
      * @throws FireflyException
      */
     public function update(User $user, array $data): User
@@ -405,14 +368,11 @@ class UserRepository implements UserRepositoryInterface
     }
 
     /**
-     * This updates the users email address. Same as changeEmail just without most logging. This makes sure that the undo/confirm routine can't catch this one.
-     * The user is NOT blocked.
+     * This updates the users email address. Same as changeEmail just without most logging. This makes sure that the
+     * undo/confirm routine can't catch this one. The user is NOT blocked.
      *
-     * @param  User  $user
-     * @param  string  $newEmail
-     *
-     * @return bool
      * @throws FireflyException
+     *
      * @see changeEmail
      */
     public function updateEmail(User $user, string $newEmail): bool
@@ -420,7 +380,7 @@ class UserRepository implements UserRepositoryInterface
         if ('' === $newEmail) {
             return true;
         }
-        $oldEmail = $user->email;
+        $oldEmail    = $user->email;
 
         // save old email as pref
         app('preferences')->setForUser($user, 'admin_previous_email_latest', $oldEmail);
@@ -434,9 +394,6 @@ class UserRepository implements UserRepositoryInterface
 
     /**
      * Remove any role the user has.
-     *
-     * @param  User  $user
-     * @param  string  $role
      */
     public function removeRole(User $user, string $role): void
     {
@@ -447,23 +404,16 @@ class UserRepository implements UserRepositoryInterface
         $user->roles()->detach($roleObj->id);
     }
 
-    /**
-     * @param  string  $role
-     *
-     * @return Role|null
-     */
     public function getRole(string $role): ?Role
     {
         return Role::where('name', $role)->first();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function validateInviteCode(string $code): bool
     {
-        $now     = Carbon::now();
+        $now     = today(config('app.timezone'));
         $invitee = InvitedUser::where('invite_code', $code)->where('expires', '>', $now->format('Y-m-d H:i:s'))->where('redeemed', 0)->first();
+
         return null !== $invitee;
     }
 }

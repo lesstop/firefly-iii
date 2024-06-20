@@ -62,16 +62,12 @@ class TransactionController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/autocomplete/getTransactionsAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
+     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionsAC
      */
     public function transactions(AutocompleteRequest $request): JsonResponse
     {
-        $data   = $request->getData();
-        $result = $this->repository->searchJournalDescriptions($data['query'], $data['limit']);
+        $data     = $request->getData();
+        $result   = $this->repository->searchJournalDescriptions($data['query'], $this->parameters->get('limit'));
 
         // limit and unique
         $filtered = $result->unique('description');
@@ -92,11 +88,7 @@ class TransactionController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/autocomplete/getTransactionsIDAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
+     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionsIDAC
      */
     public function transactionsWithID(AutocompleteRequest $request): JsonResponse
     {
@@ -113,11 +105,11 @@ class TransactionController extends Controller
             }
         }
         if (!is_numeric($data['query'])) {
-            $result = $this->repository->searchJournalDescriptions($data['query'], $data['limit']);
+            $result = $this->repository->searchJournalDescriptions($data['query'], $this->parameters->get('limit'));
         }
 
         // limit and unique
-        $array = [];
+        $array  = [];
 
         /** @var TransactionJournal $journal */
         foreach ($result as $journal) {

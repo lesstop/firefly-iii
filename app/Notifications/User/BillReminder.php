@@ -25,6 +25,8 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\User;
 
 use FireflyIII\Models\Bill;
+use FireflyIII\Support\Notifications\UrlValidator;
+use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
@@ -43,8 +45,6 @@ class BillReminder extends Notification
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(Bill $bill, string $field, int $diff)
     {
@@ -56,21 +56,26 @@ class BillReminder extends Notification
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return MailMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toMail($notifiable)
     {
@@ -81,14 +86,18 @@ class BillReminder extends Notification
 
         return (new MailMessage())
             ->markdown('emails.bill-warning', ['field' => $this->field, 'diff' => $this->diff, 'bill' => $this->bill])
-            ->subject($subject);
+            ->subject($subject)
+        ;
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return SlackMessage
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function toSlack($notifiable)
     {
@@ -96,24 +105,39 @@ class BillReminder extends Notification
         if (0 === $this->diff) {
             $message = (string)trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
         }
-        $bill = $this->bill;
-        $url  = route('bills.show', [$bill->id]);
+        $bill    = $this->bill;
+        $url     = route('bills.show', [$bill->id]);
+
         return (new SlackMessage())
             ->warning()
-            ->attachment(function ($attachment) use ($bill, $url) {
+            ->attachment(static function ($attachment) use ($bill, $url): void {
                 $attachment->title((string)trans('firefly.visit_bill', ['name' => $bill->name]), $url);
             })
-            ->content($message);
+            ->content($message)
+        ;
     }
 
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
      * @return array
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function via($notifiable)
     {
-        return ['mail', 'slack'];
+        /** @var null|User $user */
+        $user     = auth()->user();
+        $slackUrl = null === $user ? '' : app('preferences')->getForUser(auth()->user(), 'slack_webhook_url', '')->data;
+        if (is_array($slackUrl)) {
+            $slackUrl = '';
+        }
+        if (UrlValidator::isValidWebhookURL((string)$slackUrl)) {
+            return ['mail', 'slack'];
+        }
+
+        return ['mail'];
     }
 }

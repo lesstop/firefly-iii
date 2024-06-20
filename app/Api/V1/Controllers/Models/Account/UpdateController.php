@@ -30,22 +30,18 @@ use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Transformers\AccountTransformer;
 use Illuminate\Http\JsonResponse;
 use League\Fractal\Resource\Item;
-use Log;
-use Preferences;
 
 /**
  * Class UpdateController
  */
 class UpdateController extends Controller
 {
-    public const RESOURCE_KEY = 'accounts';
+    public const string RESOURCE_KEY = 'accounts';
 
     private AccountRepositoryInterface $repository;
 
     /**
      * AccountController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -62,29 +58,24 @@ class UpdateController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/accounts/updateAccount
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/accounts/updateAccount
      *
      * Update account.
-     *
-     * @param  UpdateRequest  $request
-     * @param  Account  $account
-     *
-     * @return JsonResponse
      */
     public function update(UpdateRequest $request, Account $account): JsonResponse
     {
-        Log::debug(sprintf('Now in %s', __METHOD__));
+        app('log')->debug(sprintf('Now in %s', __METHOD__));
         $data         = $request->getUpdateData();
         $data['type'] = config('firefly.shortNamesByFullName.'.$account->accountType->type);
         $account      = $this->repository->update($account, $data);
         $manager      = $this->getManager();
         $account->refresh();
-        Preferences::mark();
+        app('preferences')->mark();
 
         /** @var AccountTransformer $transformer */
-        $transformer = app(AccountTransformer::class);
+        $transformer  = app(AccountTransformer::class);
         $transformer->setParameters($this->parameters);
-        $resource = new Item($account, $transformer, self::RESOURCE_KEY);
+        $resource     = new Item($account, $transformer, self::RESOURCE_KEY);
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

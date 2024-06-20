@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Transformers;
 
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 
@@ -31,19 +32,16 @@ use FireflyIII\User;
  */
 class UserTransformer extends AbstractTransformer
 {
-    /** @var UserRepositoryInterface */
     private UserRepositoryInterface $repository;
 
     /**
      * Transform user.
      *
-     * @param  User  $user
-     *
-     * @return array
+     * @throws FireflyException
      */
     public function transform(User $user): array
     {
-        $this->repository = $this->repository ?? app(UserRepositoryInterface::class);
+        $this->repository ??= app(UserRepositoryInterface::class);
 
         return [
             'id'           => (int)$user->id,

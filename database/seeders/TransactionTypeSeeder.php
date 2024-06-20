@@ -25,14 +25,13 @@ namespace Database\Seeders;
 
 use FireflyIII\Models\TransactionType;
 use Illuminate\Database\Seeder;
-use PDOEXception;
 
 /**
  * Class TransactionTypeSeeder.
  */
 class TransactionTypeSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
         $types = [
             TransactionType::WITHDRAWAL,
@@ -45,10 +44,12 @@ class TransactionTypeSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
-            try {
-                TransactionType::create(['type' => $type]);
-            } catch (PDOException $e) {
-                // @ignoreException
+            if (null === TransactionType::where('type', $type)->first()) {
+                try {
+                    TransactionType::create(['type' => $type]);
+                } catch (\PDOException $e) {
+                    // @ignoreException
+                }
             }
         }
     }

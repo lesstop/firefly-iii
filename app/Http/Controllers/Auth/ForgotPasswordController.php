@@ -31,15 +31,11 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ForgotPasswordController
- *
- * @codeCoverageIgnore
  */
 class ForgotPasswordController extends Controller
 {
@@ -53,10 +49,7 @@ class ForgotPasswordController extends Controller
         parent::__construct();
         $this->middleware('guest');
 
-        $loginProvider = config('firefly.login_provider');
-        $authGuard     = config('firefly.authentication_guard');
-
-        if ('eloquent' !== $loginProvider || 'web' !== $authGuard) {
+        if ('web' !== config('firefly.authentication_guard')) {
             throw new FireflyException('Using external identity provider. Cannot continue.');
         }
     }
@@ -64,29 +57,26 @@ class ForgotPasswordController extends Controller
     /**
      * Send a reset link to the given user.
      *
-     * @param  Request  $request
-     * @param  UserRepositoryInterface  $repository
-     *
      * @return Factory|RedirectResponse|View
      */
     public function sendResetLinkEmail(Request $request, UserRepositoryInterface $repository)
     {
-        Log::info('Start of sendResetLinkEmail()');
-        $loginProvider = config('firefly.login_provider');
-
-        if ('eloquent' !== $loginProvider) {
-            $message = sprintf('Cannot reset password when authenticating over "%s".', $loginProvider);
-            Log::error($message);
+        app('log')->info('Start of sendResetLinkEmail()');
+        if ('web' !== config('firefly.authentication_guard')) {
+            $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
+            app('log')->error($message);
 
             return view('error', compact('message'));
         }
 
+        // validate host header.
+        $this->validateHost();
 
         $this->validateEmail($request);
 
         // verify if the user is not a demo user. If so, we give him back an error.
-        /** @var User $user */
-        $user = User::where('email', $request->get('email'))->first();
+        /** @var null|User $user */
+        $user     = User::where('email', $request->get('email'))->first();
 
         if (null !== $user && $repository->hasRole($user, 'demo')) {
             return back()->withErrors(['email' => (string)trans('firefly.cannot_reset_demo_user')]);
@@ -95,9 +85,9 @@ class ForgotPasswordController extends Controller
         // We will send the password reset link to this user. Once we have attempted
         // to send the link, we will examine the response then see the message we
         // need to show to the user. Finally, we'll send out a proper response.
-        $result = $this->broker()->sendResetLink($request->only('email'));
+        $result   = $this->broker()->sendResetLink($request->only('email'));
         if ('passwords.throttled' === $result) {
-            Log::error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
+            app('log')->error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
         }
 
         // always send the same response to the user:
@@ -107,20 +97,33 @@ class ForgotPasswordController extends Controller
     }
 
     /**
+     * @throws FireflyException
+     */
+    private function validateHost(): void
+    {
+        $configuredHost = parse_url((string)config('app.url'), PHP_URL_HOST);
+        if (false === $configuredHost || null === $configuredHost) {
+            throw new FireflyException('Please set a valid and correct Firefly III URL in the APP_URL environment variable.');
+        }
+        $host           = request()->host();
+        if ($configuredHost !== $host) {
+            Log::error(sprintf('Host header is "%s", APP_URL is "%s".', $host, $configuredHost));
+
+            throw new FireflyException('The Host-header does not match the host in the APP_URL environment variable. Please make sure these match. See also: https://bit.ly/FF3-host-header');
+        }
+    }
+
+    /**
      * Show form for email recovery.
      *
-     * @codeCoverageIgnore
-     *
      * @return Factory|View
+     *
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function showLinkRequestForm()
     {
-        $loginProvider = config('firefly.login_provider');
-        if ('eloquent' !== $loginProvider) {
-            $message = sprintf('Cannot reset password when authenticating over "%s".', $loginProvider);
+        if ('web' !== config('firefly.authentication_guard')) {
+            $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
             return view('error', compact('message'));
         }

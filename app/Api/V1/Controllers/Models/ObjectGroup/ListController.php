@@ -44,8 +44,6 @@ class ListController extends Controller
 
     /**
      * ObjectGroupController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -64,35 +62,31 @@ class ListController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/object_groups/listBillByObjectGroup
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/object_groups/listBillByObjectGroup
      *
      * List all bills in this object group
      *
-     * @param  ObjectGroup  $objectGroup
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function bills(ObjectGroup $objectGroup): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
         // get list of piggy banks. Count it and split it.
-        $collection = $this->repository->getBills($objectGroup);
-        $count      = $collection->count();
-        $bills      = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $collection  = $this->repository->getBills($objectGroup);
+        $count       = $collection->count();
+        $bills       = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($bills, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($bills, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.currencies.bills', [$objectGroup->id]).$this->buildParams());
 
         /** @var BillTransformer $transformer */
         $transformer = app(BillTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($bills, $transformer, 'bills');
+        $resource    = new FractalCollection($bills, $transformer, 'bills');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -100,38 +94,34 @@ class ListController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/object_groups/listPiggyBankByObjectGroup
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/object_groups/listPiggyBankByObjectGroup
      *
      * List all piggies under the object group.
      *
-     * @param  ObjectGroup  $objectGroup
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function piggyBanks(ObjectGroup $objectGroup): JsonResponse
     {
         // create some objects:
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
         // types to get, page size:
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
 
         // get list of piggy banks. Count it and split it.
-        $collection = $this->repository->getPiggyBanks($objectGroup);
-        $count      = $collection->count();
-        $piggyBanks = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $collection  = $this->repository->getPiggyBanks($objectGroup);
+        $count       = $collection->count();
+        $piggyBanks  = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
-        $paginator->setPath(route('api.v1.object-groups.piggy_banks', [$objectGroup->id]).$this->buildParams());
+        $paginator   = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
+        $paginator->setPath(route('api.v1.object-groups.piggy-banks', [$objectGroup->id]).$this->buildParams());
 
         /** @var PiggyBankTransformer $transformer */
         $transformer = app(PiggyBankTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($piggyBanks, $transformer, 'piggy_banks');
+        $resource    = new FractalCollection($piggyBanks, $transformer, 'piggy_banks');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);

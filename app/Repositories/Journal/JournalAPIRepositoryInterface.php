@@ -26,6 +26,7 @@ namespace FireflyIII\Repositories\Journal;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -35,42 +36,23 @@ interface JournalAPIRepositoryInterface
 {
     /**
      * Returns transaction by ID. Used to validate attachments.
-     *
-     * @param  int  $transactionId
-     *
-     * @return Transaction|null
      */
     public function findTransaction(int $transactionId): ?Transaction;
 
     /**
      * Return all attachments for journal.
-     *
-     * @param  TransactionJournal  $journal
-     *
-     * @return Collection
      */
     public function getAttachments(TransactionJournal $journal): Collection;
 
     /**
      * Return all journal links for journal.
-     *
-     * @param  TransactionJournal  $journal
-     *
-     * @return Collection
      */
     public function getJournalLinks(TransactionJournal $journal): Collection;
 
     /**
      * Get all piggy bank events for a journal.
-     *
-     * @param  TransactionJournal  $journal
-     *
-     * @return Collection
      */
     public function getPiggyBankEvents(TransactionJournal $journal): Collection;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user);
+    public function setUser(null|Authenticatable|User $user): void;
 }

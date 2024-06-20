@@ -23,19 +23,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Services\Internal\Destroy;
 
-use Exception;
 use FireflyIII\Models\TransactionCurrency;
 
 /**
  * Class CurrencyDestroyService
- *
- * @codeCoverageIgnore
  */
 class CurrencyDestroyService
 {
-    /**
-     * @param  TransactionCurrency  $currency
-     */
     public function destroy(TransactionCurrency $currency): void
     {
         $currency->delete();

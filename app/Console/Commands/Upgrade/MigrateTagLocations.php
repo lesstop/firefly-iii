@@ -24,61 +24,40 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
-use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\Tag;
 use Illuminate\Console\Command;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class MigrateTagLocations
  */
 class MigrateTagLocations extends Command
 {
-    public const CONFIG_NAME = '500_migrate_tag_locations';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Migrate tag locations.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:migrate-tag-locations {--F|force : Force the execution of this command.}';
+    use ShowsFriendlyMessages;
+
+    public const string CONFIG_NAME = '500_migrate_tag_locations';
+
+    protected $description          = 'Migrate tag locations.';
+
+    protected $signature            = 'firefly-iii:migrate-tag-locations {--F|force : Force the execution of this command.}';
 
     /**
      * Execute the console command.
-     *
-     * @return int
-     * @throws FireflyException
      */
     public function handle(): int
     {
-        $start = microtime(true);
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
         $this->migrateTagLocations();
         $this->markAsExecuted();
 
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Migrated tag locations in %s seconds.', $end));
-
         return 0;
     }
 
-    /**
-     * @return bool
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function isExecuted(): bool
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
@@ -92,6 +71,7 @@ class MigrateTagLocations extends Command
     private function migrateTagLocations(): void
     {
         $tags = Tag::get();
+
         /** @var Tag $tag */
         foreach ($tags as $tag) {
             if ($this->hasLocationDetails($tag)) {
@@ -100,19 +80,11 @@ class MigrateTagLocations extends Command
         }
     }
 
-    /**
-     * @param  Tag  $tag
-     *
-     * @return bool
-     */
     private function hasLocationDetails(Tag $tag): bool
     {
         return null !== $tag->latitude && null !== $tag->longitude && null !== $tag->zoomLevel;
     }
 
-    /**
-     * @param  Tag  $tag
-     */
     private function migrateLocationDetails(Tag $tag): void
     {
         $location             = new Location();
@@ -122,15 +94,12 @@ class MigrateTagLocations extends Command
         $location->locatable()->associate($tag);
         $location->save();
 
-        $tag->longitude = null;
-        $tag->latitude  = null;
-        $tag->zoomLevel = null;
+        $tag->longitude       = null;
+        $tag->latitude        = null;
+        $tag->zoomLevel       = null;
         $tag->save();
     }
 
-    /**
-     *
-     */
     private function markAsExecuted(): void
     {
         app('fireflyconfig')->set(self::CONFIG_NAME, true);

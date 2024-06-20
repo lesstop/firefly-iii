@@ -2,7 +2,7 @@
 
 /*
  * AccountController.php
- * Copyright (c) 2022 james@firefly-iii.org
+ * Copyright (c) 2023 james@firefly-iii.org
  *
  * This file is part of Firefly III (https://github.com/firefly-iii).
  *
@@ -25,7 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V2\Controllers\Transaction\List;
 
 use FireflyIII\Api\V2\Controllers\Controller;
-use FireflyIII\Api\V2\Request\Transaction\ListRequest;
+use FireflyIII\Api\V2\Request\Model\Transaction\ListRequest;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Support\Http\Api\TransactionFilter;
@@ -41,42 +41,48 @@ class AccountController extends Controller
     use TransactionFilter;
 
     /**
-     * @param  ListRequest  $request
-     * @param  Account  $account
-     * @return JsonResponse
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v2)#/accounts/listTransactionByAccount
      */
-    public function listTransactions(ListRequest $request, Account $account): JsonResponse
+    public function list(ListRequest $request, Account $account): JsonResponse
     {
         // collect transactions:
-        $type  = $request->get('type') ?? 'default';
-        $limit = (int)$request->get('limit');
-        $page  = (int)$request->get('page');
-        $page  = max($page, 1);
-
-        if ($limit > 0 && $limit <= $this->pageSize) {
-            $this->pageSize = $limit;
-        }
-
-        $types = $this->mapTransactionTypes($type);
+        $page      = $request->getPage();
+        $page      = max($page, 1);
+        $pageSize  = $this->parameters->get('limit');
 
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setAccounts(new Collection([$account]))
-                  ->withAPIInformation()
-                  ->setLimit($this->pageSize)
-                  ->setPage($page)
-                  ->setTypes($types);
+            ->withAPIInformation()
+            ->setLimit($pageSize)
+            ->setPage($page)
+            ->setTypes($request->getTransactionTypes())
+        ;
 
-        // TODO date filter
-        //if (null !== $this->parameters->get('start') && null !== $this->parameters->get('end')) {
-        //    $collector->setRange($this->parameters->get('start'), $this->parameters->get('end'));
-        //}
+        $start     = $request->getStartDate();
+        $end       = $request->getEndDate();
+        if (null !== $start) {
+            app('log')->debug(sprintf('Set start date to %s', $start->toIso8601String()));
+            $collector->setStart($start);
+        }
+        if (null !== $end) {
+            app('log')->debug(sprintf('Set end date to %s', $start->toIso8601String()));
+            $collector->setEnd($end);
+        }
 
         $paginator = $collector->getPaginatedGroups();
-        $paginator->setPath(route('api.v2.accounts.transactions', [$account->id])); // TODO  . $this->buildParams()
+        $paginator->setPath(
+            sprintf(
+                '%s?%s',
+                route('api.v2.accounts.transactions', [$account->id]),
+                $request->buildParams($pageSize)
+            )
+        );
 
         return response()
             ->json($this->jsonApiList('transactions', $paginator, new TransactionGroupTransformer()))
-            ->header('Content-Type', self::CONTENT_TYPE);
+            ->header('Content-Type', self::CONTENT_TYPE)
+        ;
     }
 }

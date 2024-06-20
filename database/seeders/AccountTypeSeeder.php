@@ -25,7 +25,6 @@ namespace Database\Seeders;
 
 use FireflyIII\Models\AccountType;
 use Illuminate\Database\Seeder;
-use PDOEXception;
 
 /**
  * Class AccountTypeSeeder.
@@ -50,10 +49,12 @@ class AccountTypeSeeder extends Seeder
             AccountType::LIABILITY_CREDIT,
         ];
         foreach ($types as $type) {
-            try {
-                AccountType::create(['type' => $type]);
-            } catch (PDOException $e) {
-                // @ignoreException
+            if (null === AccountType::where('type', $type)->first()) {
+                try {
+                    AccountType::create(['type' => $type]);
+                } catch (\PDOException $e) {
+                    // @ignoreException
+                }
             }
         }
     }

@@ -24,15 +24,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use FireflyIII\User;
-use Log;
 
 /**
  * Class UpdatePiggybank
@@ -43,52 +42,45 @@ class UpdatePiggybank implements ActionInterface
 
     /**
      * TriggerInterface constructor.
-     *
-     * @param  RuleAction  $action
      */
     public function __construct(RuleAction $action)
     {
         $this->action = $action;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function actOnArray(array $journal): bool
     {
-        Log::debug(sprintf('Triggered rule action UpdatePiggybank on journal #%d', $journal['transaction_journal_id']));
+        $actionValue = $this->action->getValue($journal);
+
+        app('log')->debug(sprintf('Triggered rule action UpdatePiggybank on journal #%d', $journal['transaction_journal_id']));
 
         // refresh the transaction type.
-        $user = User::find($journal['user_id']);
+        /** @var User $user */
+        $user        = User::find($journal['user_id']);
+
         /** @var TransactionJournal $journalObj */
-        $journalObj                       = $user->transactionJournals()->find($journal['transaction_journal_id']);
-        $type                             = TransactionType::find((int)$journalObj->transaction_type_id);
-        $journal['transaction_type_type'] = $type->type;
+        $journalObj  = $user->transactionJournals()->find($journal['transaction_journal_id']);
 
-        if (TransactionType::TRANSFER !== $journal['transaction_type_type']) {
-            Log::info(sprintf('Journal #%d is a "%s" so skip this action.', $journal['transaction_journal_id'], $journal['transaction_type_type']));
-
-            return false;
-        }
-
-        $piggyBank = $this->findPiggyBank($user);
+        $piggyBank   = $this->findPiggyBank($user, $actionValue);
         if (null === $piggyBank) {
-            Log::info(
-                sprintf('No piggy bank named "%s", cant execute action #%d of rule #%d', $this->action->action_value, $this->action->id, $this->action->rule_id)
+            app('log')->info(
+                sprintf('No piggy bank named "%s", cant execute action #%d of rule #%d', $actionValue, $this->action->id, $this->action->rule_id)
             );
+            event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_piggy', ['name' => $actionValue])));
 
             return false;
         }
 
-        Log::debug(sprintf('Found piggy bank #%d ("%s")', $piggyBank->id, $piggyBank->name));
+        app('log')->debug(sprintf('Found piggy bank #%d ("%s")', $piggyBank->id, $piggyBank->name));
 
         /** @var Transaction $source */
         $source      = $journalObj->transactions()->where('amount', '<', 0)->first();
+
         /** @var Transaction $destination */
         $destination = $journalObj->transactions()->where('amount', '>', 0)->first();
 
-        if ((int)$source->account_id === (int)$piggyBank->account_id) {
-            Log::debug('Piggy bank account is linked to source, so remove amount from piggy bank.');
+        if ($source->account_id === $piggyBank->account_id) {
+            app('log')->debug('Piggy bank account is linked to source, so remove amount from piggy bank.');
             $this->removeAmount($piggyBank, $journalObj, $destination->amount);
 
             event(
@@ -108,8 +100,8 @@ class UpdatePiggybank implements ActionInterface
 
             return true;
         }
-        if ((int)$destination->account_id === (int)$piggyBank->account_id) {
-            Log::debug('Piggy bank account is linked to source, so add amount to piggy bank.');
+        if ($destination->account_id === $piggyBank->account_id) {
+            app('log')->debug('Piggy bank account is linked to source, so add amount to piggy bank.');
             $this->addAmount($piggyBank, $journalObj, $destination->amount);
 
             event(
@@ -129,45 +121,35 @@ class UpdatePiggybank implements ActionInterface
 
             return true;
         }
-        Log::info(
+        app('log')->info(
             sprintf(
                 'Piggy bank is not linked to source ("#%d") or destination ("#%d"), so no action will be taken.',
                 $source->account_id,
                 $destination->account_id
             )
         );
+        event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.no_link_piggy', ['name' => $actionValue])));
 
         return false;
     }
 
-    /**
-     * @param  User  $user
-     *
-     * @return PiggyBank|null
-     */
-    private function findPiggyBank(User $user): ?PiggyBank
+    private function findPiggyBank(User $user, string $name): ?PiggyBank
     {
-        return $user->piggyBanks()->where('piggy_banks.name', $this->action->action_value)->first();
+        return $user->piggyBanks()->where('piggy_banks.name', $name)->first();
     }
 
-    /**
-     * @param  PiggyBank  $piggyBank
-     * @param  TransactionJournal  $journal
-     * @param  string  $amount
-     * @return void
-     */
     private function removeAmount(PiggyBank $piggyBank, TransactionJournal $journal, string $amount): void
     {
         $repository = app(PiggyBankRepositoryInterface::class);
         $repository->setUser($journal->user);
 
         // how much can we remove from this piggy bank?
-        $toRemove = $repository->getCurrentAmount($piggyBank);
-        Log::debug(sprintf('Amount is %s, max to remove is %s', $amount, $toRemove));
+        $toRemove   = $repository->getCurrentAmount($piggyBank);
+        app('log')->debug(sprintf('Amount is %s, max to remove is %s', $amount, $toRemove));
 
         // if $amount is bigger than $toRemove, shrink it.
-        $amount = -1 === bccomp($amount, $toRemove) ? $amount : $toRemove;
-        Log::debug(sprintf('Amount is now %s', $amount));
+        $amount     = -1 === bccomp($amount, $toRemove) ? $amount : $toRemove;
+        app('log')->debug(sprintf('Amount is now %s', $amount));
 
         // if amount is zero, stop.
         if (0 === bccomp('0', $amount)) {
@@ -182,29 +164,28 @@ class UpdatePiggybank implements ActionInterface
 
             return;
         }
-        Log::debug(sprintf('Will now remove %s from piggy bank.', $amount));
+        app('log')->debug(sprintf('Will now remove %s from piggy bank.', $amount));
 
         $repository->removeAmount($piggyBank, $amount, $journal);
     }
 
-    /**
-     * @param  PiggyBank  $piggyBank
-     * @param  TransactionJournal  $journal
-     * @param  string  $amount
-     * @return void
-     */
     private function addAmount(PiggyBank $piggyBank, TransactionJournal $journal, string $amount): void
     {
         $repository = app(PiggyBankRepositoryInterface::class);
         $repository->setUser($journal->user);
 
         // how much can we add to the piggy bank?
-        $toAdd = bcsub($piggyBank->targetamount, $repository->getCurrentAmount($piggyBank));
-        Log::debug(sprintf('Max amount to add to piggy bank is %s, amount is %s', $toAdd, $amount));
+        if (0 !== bccomp($piggyBank->targetamount, '0')) {
+            $toAdd  = bcsub($piggyBank->targetamount, $repository->getCurrentAmount($piggyBank));
+            app('log')->debug(sprintf('Max amount to add to piggy bank is %s, amount is %s', $toAdd, $amount));
 
-        // update amount to fit:
-        $amount = -1 === bccomp($amount, $toAdd) ? $amount : $toAdd;
-        Log::debug(sprintf('Amount is now %s', $amount));
+            // update amount to fit:
+            $amount = -1 === bccomp($amount, $toAdd) ? $amount : $toAdd;
+            app('log')->debug(sprintf('Amount is now %s', $amount));
+        }
+        if (0 === bccomp($piggyBank->targetamount, '0')) {
+            app('log')->debug('Target amount is zero, can add anything.');
+        }
 
         // if amount is zero, stop.
         if (0 === bccomp('0', $amount)) {
@@ -219,7 +200,7 @@ class UpdatePiggybank implements ActionInterface
 
             return;
         }
-        Log::debug(sprintf('Will now add %s to piggy bank.', $amount));
+        app('log')->debug(sprintf('Will now add %s to piggy bank.', $amount));
 
         $repository->addAmount($piggyBank, $amount, $journal);
     }

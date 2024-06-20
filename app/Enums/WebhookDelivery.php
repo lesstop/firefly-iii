@@ -24,8 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Enums;
 
+/**
+ * Class WebhookDelivery
+ */
 enum WebhookDelivery: int
 {
-    //case XML = 200;
+    // case XML = 200;
     case JSON = 300;
 }

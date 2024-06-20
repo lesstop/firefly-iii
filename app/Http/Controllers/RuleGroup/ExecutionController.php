@@ -24,7 +24,6 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\RuleGroup;
 
 use Carbon\Carbon;
-use Exception;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\SelectTransactionsRequest;
 use FireflyIII\Models\RuleGroup;
@@ -44,8 +43,6 @@ class ExecutionController extends Controller
 
     /**
      * ExecutionController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -66,21 +63,17 @@ class ExecutionController extends Controller
     /**
      * Execute the given rulegroup on a set of existing transactions.
      *
-     * @param  SelectTransactionsRequest  $request
-     * @param  RuleGroup  $ruleGroup
-     *
-     * @return RedirectResponse
-     * @throws Exception
+     * @throws \Exception
      */
     public function execute(SelectTransactionsRequest $request, RuleGroup $ruleGroup): RedirectResponse
     {
         // Get parameters specified by the user
         /** @var User $user */
-        $user      = auth()->user();
-        $accounts  = implode(',', $request->get('accounts'));
-        $startDate = new Carbon($request->get('start'));
-        $endDate   = new Carbon($request->get('end'));
-        $rules     = $this->ruleGroupRepository->getActiveRules($ruleGroup);
+        $user          = auth()->user();
+        $accounts      = implode(',', $request->get('accounts'));
+        $startDate     = new Carbon($request->get('start'));
+        $endDate       = new Carbon($request->get('end'));
+        $rules         = $this->ruleGroupRepository->getActiveRules($ruleGroup);
         // create new rule engine:
         $newRuleEngine = app(RuleEngineInterface::class);
         $newRuleEngine->setUser($user);
@@ -103,14 +96,12 @@ class ExecutionController extends Controller
     /**
      * Select transactions to apply the group on.
      *
-     * @param  RuleGroup  $ruleGroup
-     *
      * @return Factory|View
      */
     public function selectTransactions(RuleGroup $ruleGroup)
     {
         $first    = session('first')->format('Y-m-d');
-        $today    = Carbon::now()->format('Y-m-d');
+        $today    = today(config('app.timezone'))->format('Y-m-d');
         $subTitle = (string)trans('firefly.apply_rule_group_selection', ['title' => $ruleGroup->title]);
 
         return view('rules.rule-group.select-transactions', compact('first', 'today', 'ruleGroup', 'subTitle'));

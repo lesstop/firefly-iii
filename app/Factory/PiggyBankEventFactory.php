@@ -25,9 +25,7 @@ namespace FireflyIII\Factory;
 
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
-use Log;
 
 /**
  * Create piggy bank events.
@@ -36,21 +34,11 @@ use Log;
  */
 class PiggyBankEventFactory
 {
-    /**
-     * @param  TransactionJournal  $journal
-     * @param  PiggyBank|null  $piggyBank
-     */
     public function create(TransactionJournal $journal, ?PiggyBank $piggyBank): void
     {
-        Log::debug(sprintf('Now in PiggyBankEventCreate for a %s', $journal->transactionType->type));
+        app('log')->debug(sprintf('Now in PiggyBankEventCreate for a %s', $journal->transactionType->type));
         if (null === $piggyBank) {
-            Log::debug('Piggy bank is null');
-
-            return;
-        }
-
-        if (TransactionType::TRANSFER !== $journal->transactionType->type) {
-            Log::info(sprintf('Will not connect %s #%d to a piggy bank.', $journal->transactionType->type, $journal->id));
+            app('log')->debug('Piggy bank is null');
 
             return;
         }
@@ -61,14 +49,14 @@ class PiggyBankEventFactory
 
         $repetition = $piggyRepos->getRepetition($piggyBank);
         if (null === $repetition) {
-            Log::error(sprintf('No piggy bank repetition on %s!', $journal->date->format('Y-m-d')));
+            app('log')->error(sprintf('No piggy bank repetition on %s!', $journal->date->format('Y-m-d')));
 
             return;
         }
-        Log::debug('Found repetition');
-        $amount = $piggyRepos->getExactAmount($piggyBank, $repetition, $journal);
+        app('log')->debug('Found repetition');
+        $amount     = $piggyRepos->getExactAmount($piggyBank, $repetition, $journal);
         if (0 === bccomp($amount, '0')) {
-            Log::debug('Amount is zero, will not create event.');
+            app('log')->debug('Amount is zero, will not create event.');
 
             return;
         }

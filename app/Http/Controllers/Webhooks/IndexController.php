@@ -24,27 +24,24 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Webhooks;
 
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use Illuminate\Contracts\View\Factory;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class IndexController
  */
 class IndexController extends Controller
 {
-    /**
-     *
-     */
     public function __construct()
     {
         parent::__construct();
 
         // translations:
         $this->middleware(
-            function ($request, $next) {
+            static function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-bolt');
                 app('view')->share('title', (string)trans('firefly.webhooks'));
 
@@ -54,15 +51,17 @@ class IndexController extends Controller
     }
 
     /**
-     * Show debug info.
-     *
-     * @param  Request  $request
-     *
      * @return Factory|View
-     * @throws FireflyException
      */
-    public function index(Request $request)
+    public function index()
     {
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning('User visits webhook index page, but webhooks are DISABLED.');
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+        Log::channel('audit')->info('User visits webhook index page.');
+
         return view('webhooks.index');
     }
 }

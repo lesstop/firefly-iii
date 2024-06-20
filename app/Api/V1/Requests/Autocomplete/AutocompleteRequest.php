@@ -33,12 +33,9 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class AutocompleteRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
-    /**
-     * @return array
-     */
     public function getData(): array
     {
         $types = $this->convertString('types');
@@ -46,8 +43,6 @@ class AutocompleteRequest extends FormRequest
         if ('' !== $types) {
             $array = explode(',', $types);
         }
-        $limit = $this->convertInteger('limit');
-        $limit = 0 === $limit ? 10 : $limit;
 
         // remove 'initial balance' from allowed types. its internal
         $array = array_diff($array, [AccountType::INITIAL_BALANCE, AccountType::RECONCILIATION]);
@@ -56,17 +51,12 @@ class AutocompleteRequest extends FormRequest
             'types' => $array,
             'query' => $this->convertString('query'),
             'date'  => $this->getCarbonDate('date'),
-            'limit' => $limit,
         ];
     }
 
-    /**
-     * @return array
-     */
     public function rules(): array
     {
         return [
-            'limit' => 'min:0|max:1337',
         ];
     }
 }

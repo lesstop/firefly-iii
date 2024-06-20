@@ -29,7 +29,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * @codeCoverageIgnore
  * Class AttachmentServiceProvider.
  */
 class AttachmentServiceProvider extends ServiceProvider
@@ -37,9 +36,7 @@ class AttachmentServiceProvider extends ServiceProvider
     /**
      * Bootstrap the application services.
      */
-    public function boot(): void
-    {
-    }
+    public function boot(): void {}
 
     /**
      * Register the application services.
@@ -48,7 +45,7 @@ class AttachmentServiceProvider extends ServiceProvider
     {
         $this->app->bind(
             AttachmentRepositoryInterface::class,
-            function (Application $app) {
+            static function (Application $app) {
                 /** @var AttachmentRepositoryInterface $repository */
                 $repository = app(AttachmentRepository::class);
                 // reference to auth is not understood by phpstan.

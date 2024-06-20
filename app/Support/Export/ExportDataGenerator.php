@@ -53,12 +53,9 @@ use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\User;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
 use League\Csv\CannotInsertRecord;
 use League\Csv\Exception;
 use League\Csv\Writer;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ExportDataGenerator
@@ -67,8 +64,8 @@ class ExportDataGenerator
 {
     use ConvertsDataTypes;
 
-    private const ADD_RECORD_ERR = 'Could not add record to set: %s';
-    private const EXPORT_ERR     = 'Could not export to string: %s';
+    private const string ADD_RECORD_ERR = 'Could not add record to set: %s';
+    private const string EXPORT_ERR     = 'Could not export to string: %s';
     private Collection $accounts;
     private Carbon     $end;
     private bool       $exportAccounts;
@@ -85,8 +82,8 @@ class ExportDataGenerator
 
     public function __construct()
     {
-        $this->accounts = new Collection();
-        $this->start    = today(config('app.timezone'));
+        $this->accounts           = new Collection();
+        $this->start              = today(config('app.timezone'));
         $this->start->subYear();
         $this->end                = today(config('app.timezone'));
         $this->exportTransactions = false;
@@ -101,7 +98,6 @@ class ExportDataGenerator
     }
 
     /**
-     * @return array
      * @throws FireflyException
      */
     public function export(): array
@@ -139,12 +135,13 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportAccounts(): string
     {
-        $header = [
+        $header      = [
             'user_id',
             'account_id',
             'created_at',
@@ -163,11 +160,13 @@ class ExportDataGenerator
             'interest',
             'interest_period',
         ];
+
         /** @var AccountRepositoryInterface $repository */
-        $repository = app(AccountRepositoryInterface::class);
+        $repository  = app(AccountRepositoryInterface::class);
         $repository->setUser($this->user);
         $allAccounts = $repository->getAccountsByType([]);
         $records     = [];
+
         /** @var Account $account */
         foreach ($allAccounts as $account) {
             $currency  = $repository->getAccountCurrency($account);
@@ -192,39 +191,38 @@ class ExportDataGenerator
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv         = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
         return $string;
     }
 
-    /**
-     * @param  User  $user
-     */
     public function setUser(User $user): void
     {
         $this->user = $user;
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportBills(): string
@@ -232,8 +230,8 @@ class ExportDataGenerator
         /** @var BillRepositoryInterface $repository */
         $repository = app(BillRepositoryInterface::class);
         $repository->setUser($this->user);
-        $bills   = $repository->getBills();
-        $header  = [
+        $bills      = $repository->getBills();
+        $header     = [
             'user_id',
             'bill_id',
             'created_at',
@@ -247,7 +245,7 @@ class ExportDataGenerator
             'skip',
             'active',
         ];
-        $records = [];
+        $records    = [];
 
         /** @var Bill $bill */
         foreach ($bills as $bill) {
@@ -267,23 +265,24 @@ class ExportDataGenerator
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv        = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -291,12 +290,13 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportBudgets(): string
     {
-        $header = [
+        $header      = [
             'user_id',
             'budget_id',
             'name',
@@ -310,12 +310,14 @@ class ExportDataGenerator
 
         $budgetRepos = app(BudgetRepositoryInterface::class);
         $budgetRepos->setUser($this->user);
-        $limitRepos = app(BudgetLimitRepositoryInterface::class);
-        $budgets    = $budgetRepos->getBudgets();
-        $records    = [];
+        $limitRepos  = app(BudgetLimitRepositoryInterface::class);
+        $budgets     = $budgetRepos->getBudgets();
+        $records     = [];
+
         /** @var Budget $budget */
         foreach ($budgets as $budget) {
             $limits = $limitRepos->getBudgetLimits($budget);
+
             /** @var BudgetLimit $limit */
             foreach ($limits as $limit) {
                 $records[] = [
@@ -332,23 +334,24 @@ class ExportDataGenerator
             }
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv         = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -356,15 +359,16 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportCategories(): string
     {
-        $header = ['user_id', 'category_id', 'created_at', 'updated_at', 'name'];
+        $header     = ['user_id', 'category_id', 'created_at', 'updated_at', 'name'];
 
         /** @var CategoryRepositoryInterface $catRepos */
-        $catRepos = app(CategoryRepositoryInterface::class);
+        $catRepos   = app(CategoryRepositoryInterface::class);
         $catRepos->setUser($this->user);
 
         $records    = [];
@@ -381,23 +385,24 @@ class ExportDataGenerator
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv        = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -405,20 +410,21 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportPiggies(): string
     {
         /** @var PiggyBankRepositoryInterface $piggyRepos */
-        $piggyRepos = app(PiggyBankRepositoryInterface::class);
+        $piggyRepos   = app(PiggyBankRepositoryInterface::class);
         $piggyRepos->setUser($this->user);
 
         /** @var AccountRepositoryInterface $accountRepos */
         $accountRepos = app(AccountRepositoryInterface::class);
         $accountRepos->setUser($this->user);
 
-        $header  = [
+        $header       = [
             'user_id',
             'piggy_bank_id',
             'created_at',
@@ -434,8 +440,8 @@ class ExportDataGenerator
             'order',
             'active',
         ];
-        $records = [];
-        $piggies = $piggyRepos->getPiggyBanks();
+        $records      = [];
+        $piggies      = $piggyRepos->getPiggyBanks();
 
         /** @var PiggyBank $piggy */
         foreach ($piggies as $piggy) {
@@ -459,23 +465,24 @@ class ExportDataGenerator
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv          = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -483,7 +490,8 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportRecurring(): string
@@ -491,63 +499,27 @@ class ExportDataGenerator
         /** @var RecurringRepositoryInterface $recurringRepos */
         $recurringRepos = app(RecurringRepositoryInterface::class);
         $recurringRepos->setUser($this->user);
-        $header      = [
+        $header         = [
             // recurrence:
-            'user_id',
-            'recurrence_id',
-            'row_contains',
-            'created_at',
-            'updated_at',
-            'type',
-            'title',
-            'description',
-            'first_date',
-            'repeat_until',
-            'latest_date',
-            'repetitions',
-            'apply_rules',
-            'active',
+            'user_id', 'recurrence_id', 'row_contains', 'created_at', 'updated_at', 'type', 'title', 'description', 'first_date', 'repeat_until', 'latest_date', 'repetitions', 'apply_rules', 'active',
 
             // repetition info:
-            'type',
-            'moment',
-            'skip',
-            'weekend',
+            'type', 'moment', 'skip', 'weekend',
             // transactions + meta:
-            'currency_code',
-            'foreign_currency_code',
-            'source_name',
-            'source_type',
-            'destination_name',
-            'destination_type',
-            'amount',
-            'foreign_amount',
-            'category',
-            'budget',
-            'piggy_bank',
-            'tags',
+            'currency_code', 'foreign_currency_code', 'source_name', 'source_type', 'destination_name', 'destination_type', 'amount', 'foreign_amount', 'category', 'budget', 'piggy_bank', 'tags',
         ];
-        $records     = [];
-        $recurrences = $recurringRepos->getAll();
+        $records        = [];
+        $recurrences    = $recurringRepos->getAll();
+
         /** @var Recurrence $recurrence */
         foreach ($recurrences as $recurrence) {
             // add recurrence:
             $records[] = [
-                $this->user->id,
-                $recurrence->id,
+                $this->user->id, $recurrence->id,
                 'recurrence',
-                $recurrence->created_at->toAtomString(),
-                $recurrence->updated_at->toAtomString(),
-                $recurrence->transactionType->type,
-                $recurrence->title,
-                $recurrence->description,
-                $recurrence->first_date?->format('Y-m-d'),
-                $recurrence->repeat_until?->format('Y-m-d'),
-                $recurrence->latest_date?->format('Y-m-d'),
-                $recurrence->repetitions,
-                $recurrence->apply_rules,
-                $recurrence->active,
+                $recurrence->created_at->toAtomString(), $recurrence->updated_at->toAtomString(), $recurrence->transactionType->type, $recurrence->title, $recurrence->description, $recurrence->first_date?->format('Y-m-d'), $recurrence->repeat_until?->format('Y-m-d'), $recurrence->latest_date?->format('Y-m-d'), $recurrence->repetitions, $recurrence->apply_rules, $recurrence->active,
             ];
+
             // add new row for each repetition
             /** @var RecurrenceRepetition $repetition */
             foreach ($recurrence->recurrenceRepetitions as $repetition) {
@@ -556,25 +528,13 @@ class ExportDataGenerator
                     $this->user->id,
                     $recurrence->id,
                     'repetition',
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
+                    null, null, null, null, null, null, null, null, null, null, null,
 
                     // repetition:
-                    $repetition->repetition_type,
-                    $repetition->repetition_moment,
-                    $repetition->repetition_skip,
-                    $repetition->weekend,
+                    $repetition->repetition_type, $repetition->repetition_moment, $repetition->repetition_skip, $repetition->weekend,
                 ];
             }
+
             /** @var RecurrenceTransaction $transaction */
             foreach ($recurrence->recurrenceTransactions as $transaction) {
                 $categoryName = $recurringRepos->getCategoryName($transaction);
@@ -582,62 +542,39 @@ class ExportDataGenerator
                 $piggyBankId  = $recurringRepos->getPiggyBank($transaction);
                 $tags         = $recurringRepos->getTags($transaction);
 
-                $records[] = [
+                $records[]    = [
                     // recurrence
                     $this->user->id,
                     $recurrence->id,
                     'transaction',
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
+                    null, null, null, null, null, null, null, null, null, null, null,
 
                     // repetition:
-                    null,
-                    null,
-                    null,
-                    null,
+                    null, null, null, null,
 
                     // transaction:
-                    $transaction->transactionCurrency->code,
-                    $transaction->foreignCurrency?->code,
-                    $transaction->sourceAccount->name,
-                    $transaction->sourceAccount->accountType->type,
-                    $transaction->destinationAccount->name,
-                    $transaction->destinationAccount->accountType->type,
-                    $transaction->amount,
-                    $transaction->foreign_amount,
-                    $categoryName,
-                    $budgetId,
-                    $piggyBankId,
-                    implode(',', $tags),
+                    $transaction->transactionCurrency->code, $transaction->foreignCurrency?->code, $transaction->sourceAccount->name, $transaction->sourceAccount->accountType->type, $transaction->destinationAccount->name, $transaction->destinationAccount->accountType->type, $transaction->amount, $transaction->foreign_amount, $categoryName, $budgetId, $piggyBankId, implode(',', $tags),
                 ];
             }
         }
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv            = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -645,128 +582,76 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportRules(): string
     {
         $header    = [
-            'user_id',
-            'rule_id',
-            'row_contains',
-            'created_at',
-            'updated_at',
-            'group_id',
-            'group_name',
-            'title',
-            'description',
-            'order',
-            'active',
-            'stop_processing',
-            'strict',
-            'trigger_type',
-            'trigger_value',
-            'trigger_order',
-            'trigger_active',
-            'trigger_stop_processing',
-            'action_type',
-            'action_value',
-            'action_order',
-            'action_active',
-            'action_stop_processing',
-        ];
+            'user_id', 'rule_id', 'row_contains',
+            'created_at', 'updated_at', 'group_id', 'title', 'description', 'order', 'active', 'stop_processing', 'strict',
+            'trigger_type', 'trigger_value', 'trigger_order', 'trigger_active', 'trigger_stop_processing',
+            'action_type', 'action_value', 'action_order', 'action_active', 'action_stop_processing'];
         $ruleRepos = app(RuleRepositoryInterface::class);
         $ruleRepos->setUser($this->user);
-        $rules   = $ruleRepos->getAll();
-        $records = [];
+        $rules     = $ruleRepos->getAll();
+        $records   = [];
+
         /** @var Rule $rule */
         foreach ($rules as $rule) {
-            $records[] = [
-                $this->user->id,
-                $rule->id,
+            $entry     = [
+                $this->user->id, $rule->id,
                 'rule',
-                $rule->created_at->toAtomString(),
-                $rule->updated_at->toAtomString(),
-                $rule->ruleGroup->id,
-                $rule->ruleGroup->title,
-                $rule->title,
-                $rule->description,
-                $rule->order,
-                $rule->active,
-                $rule->stop_processing,
-                $rule->strict,
+                $rule->created_at->toAtomString(), $rule->updated_at->toAtomString(), $rule->ruleGroup->id, $rule->ruleGroup->title, $rule->title, $rule->description, $rule->order, $rule->active, $rule->stop_processing, $rule->strict,
+                null, null, null, null, null, null, null, null, null,
             ];
+            $records[] = $entry;
+
             /** @var RuleTrigger $trigger */
             foreach ($rule->ruleTriggers as $trigger) {
-                $records[] = [
+                $entry     = [
                     $this->user->id,
                     $rule->id,
                     'trigger',
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    $trigger->trigger_type,
-                    $trigger->trigger_value,
-                    $trigger->order,
-                    $trigger->active,
-                    $trigger->stop_processing,
+                    null, null, null, null, null, null, null, null, null,
+                    $trigger->trigger_type, $trigger->trigger_value, $trigger->order, $trigger->active, $trigger->stop_processing,
+                    null, null, null, null, null,
                 ];
+                $records[] = $entry;
             }
 
             /** @var RuleAction $action */
             foreach ($rule->ruleActions as $action) {
-                $records[] = [
+                $entry     = [
                     $this->user->id,
                     $rule->id,
                     'action',
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    $action->action_type,
-                    $action->action_value,
-                    $action->order,
-                    $action->active,
-                    $action->stop_processing,
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    $action->action_type, $action->action_value, $action->order, $action->active, $action->stop_processing,
                 ];
+                $records[] = $entry;
             }
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv       = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -774,19 +659,19 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     private function exportTags(): string
     {
-        $header = ['user_id', 'tag_id', 'created_at', 'updated_at', 'tag', 'date', 'description', 'latitude', 'longitude', 'zoom_level'];
+        $header   = ['user_id', 'tag_id', 'created_at', 'updated_at', 'tag', 'date', 'description', 'latitude', 'longitude', 'zoom_level'];
 
         $tagRepos = app(TagRepositoryInterface::class);
         $tagRepos->setUser($this->user);
-        $tags    = $tagRepos->get();
-        $records = [];
+        $tags     = $tagRepos->get();
+        $records  = [];
+
         /** @var Tag $tag */
         foreach ($tags as $tag) {
             $records[] = [
@@ -803,23 +688,24 @@ class ExportDataGenerator
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv      = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
@@ -827,161 +713,94 @@ class ExportDataGenerator
     }
 
     /**
-     * @return string
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        return null;
+    }
+
+    /**
+     * @throws CannotInsertRecord
+     * @throws Exception
      * @throws FireflyException
      */
     private function exportTransactions(): string
     {
         // TODO better place for keys?
-        $header = [
-            'user_id',
-            'group_id',
-            'journal_id',
-            'created_at',
-            'updated_at',
-            'group_title',
-            'type',
-            'amount',
-            'foreign_amount',
-            'currency_code',
-            'foreign_currency_code',
-            'description',
-            'date',
-            'source_name',
-            'source_iban',
-            'source_type',
-            'destination_name',
-            'destination_iban',
-            'destination_type',
-            'reconciled',
-            'category',
-            'budget',
-            'bill',
-            'tags',
-            'notes',
-            // all optional meta fields:
-        ];
+        $header     = ['user_id', 'group_id', 'journal_id', 'created_at', 'updated_at', 'group_title', 'type', 'amount', 'foreign_amount', 'currency_code', 'foreign_currency_code', 'description', 'date', 'source_name', 'source_iban', 'source_type', 'destination_name', 'destination_iban', 'destination_type', 'reconciled', 'category', 'budget', 'bill', 'tags', 'notes'];
 
         $metaFields = config('firefly.journal_meta_fields');
         $header     = array_merge($header, $metaFields);
 
-        $collector = app(GroupCollectorInterface::class);
+        $collector  = app(GroupCollectorInterface::class);
         $collector->setUser($this->user);
         $collector->setRange($this->start, $this->end)->withAccountInformation()->withCategoryInformation()->withBillInformation()
-                  ->withBudgetInformation()->withTagInformation()->withNotes();
+            ->withBudgetInformation()->withTagInformation()->withNotes()
+        ;
         if (0 !== $this->accounts->count()) {
             $collector->setAccounts($this->accounts);
         }
 
-        $journals = $collector->getExtractedJournals();
+        $journals   = $collector->getExtractedJournals();
 
         // get repository for meta data:
         $repository = app(TransactionGroupRepositoryInterface::class);
         $repository->setUser($this->user);
 
-        $records = [];
+        $records    = [];
+
         /** @var array $journal */
         foreach ($journals as $journal) {
             $metaData  = $repository->getMetaFields($journal['transaction_journal_id'], $metaFields);
             $records[] = [
-                $journal['user_id'],
-                $journal['transaction_group_id'],
-                $journal['transaction_journal_id'],
-                $journal['created_at']->toAtomString(),
-                $journal['updated_at']->toAtomString(),
-                $journal['transaction_group_title'],
-                $journal['transaction_type_type'],
-                $journal['amount'],
-                $journal['foreign_amount'],
-                $journal['currency_code'],
-                $journal['foreign_currency_code'],
-                $journal['description'],
-                $journal['date']->toAtomString(),
-                $journal['source_account_name'],
-                $journal['source_account_iban'],
-                $journal['source_account_type'],
-                $journal['destination_account_name'],
-                $journal['destination_account_iban'],
-                $journal['destination_account_type'],
-                $journal['reconciled'],
-                $journal['category_name'],
-                $journal['budget_name'],
-                $journal['bill_name'],
+                $journal['user_id'], $journal['transaction_group_id'], $journal['transaction_journal_id'], $journal['created_at']->toAtomString(), $journal['updated_at']->toAtomString(), $journal['transaction_group_title'], $journal['transaction_type_type'], $journal['amount'], $journal['foreign_amount'], $journal['currency_code'], $journal['foreign_currency_code'], $journal['description'], $journal['date']->toAtomString(), $journal['source_account_name'], $journal['source_account_iban'], $journal['source_account_type'], $journal['destination_account_name'], $journal['destination_account_iban'], $journal['destination_account_type'], $journal['reconciled'], $journal['category_name'], $journal['budget_name'], $journal['bill_name'],
                 $this->mergeTags($journal['tags']),
-                $this->clearString($journal['notes'], true),
-
-                // export also the optional fields (ALL)
+                $this->clearStringKeepNewlines($journal['notes']),
 
                 // sepa
-                $metaData['sepa_cc'],
-                $metaData['sepa_ct_op'],
-                $metaData['sepa_ct_id'],
-                $metaData['sepa_db'],
-                $metaData['sepa_country'],
-                $metaData['sepa_ep'],
-                $metaData['sepa_ci'],
-                $metaData['sepa_batch_id'],
-                $metaData['external_url'],
+                $metaData['sepa_cc'], $metaData['sepa_ct_op'], $metaData['sepa_ct_id'], $metaData['sepa_db'], $metaData['sepa_country'], $metaData['sepa_ep'], $metaData['sepa_ci'], $metaData['sepa_batch_id'], $metaData['external_url'],
 
                 // dates
-                $metaData['interest_date'],
-                $metaData['book_date'],
-                $metaData['process_date'],
-                $metaData['due_date'],
-                $metaData['payment_date'],
-                $metaData['invoice_date'],
+                $metaData['interest_date'], $metaData['book_date'], $metaData['process_date'], $metaData['due_date'], $metaData['payment_date'], $metaData['invoice_date'],
 
                 // others
-                $metaData['recurrence_id'],
-                $metaData['internal_reference'],
-                $metaData['bunq_payment_id'],
-                $metaData['import_hash'],
-                $metaData['import_hash_v2'],
-                $metaData['external_id'],
-                $metaData['original_source'],
+                $metaData['recurrence_id'], $metaData['internal_reference'], $metaData['bunq_payment_id'], $metaData['import_hash'], $metaData['import_hash_v2'], $metaData['external_id'], $metaData['original_source'],
 
                 // recurring transactions
-                $metaData['recurrence_total'],
-                $metaData['recurrence_count'],
+                $metaData['recurrence_total'], $metaData['recurrence_count'],
             ];
         }
 
-        //load the CSV document from a string
-        $csv = Writer::createFromString();
+        // load the CSV document from a string
+        $csv        = Writer::createFromString();
 
-        //insert the header
+        // insert the header
         try {
             $csv->insertOne($header);
         } catch (CannotInsertRecord $e) {
             throw new FireflyException(sprintf(self::ADD_RECORD_ERR, $e->getMessage()), 0, $e);
         }
 
-        //insert all the records
+        // insert all the records
         $csv->insertAll($records);
 
         try {
             $string = $csv->toString();
         } catch (Exception $e) { // intentional generic exception
-            Log::error($e->getMessage());
+            app('log')->error($e->getMessage());
+
             throw new FireflyException(sprintf(self::EXPORT_ERR, $e->getMessage()), 0, $e);
         }
 
         return $string;
     }
 
-    /**
-     * @param  Collection  $accounts
-     */
     public function setAccounts(Collection $accounts): void
     {
         $this->accounts = $accounts;
     }
 
-    /**
-     * @param  array  $tags
-     *
-     * @return string
-     */
     private function mergeTags(array $tags): string
     {
         if (0 === count($tags)) {
@@ -996,106 +815,65 @@ class ExportDataGenerator
     }
 
     /**
-     * @param  Carbon  $end
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
+    public function has(mixed $key): mixed
+    {
+        return null;
+    }
+
     public function setEnd(Carbon $end): void
     {
         $this->end = $end;
     }
 
-    /**
-     * @param  bool  $exportAccounts
-     */
     public function setExportAccounts(bool $exportAccounts): void
     {
         $this->exportAccounts = $exportAccounts;
     }
 
-    /**
-     * @param  bool  $exportBills
-     */
     public function setExportBills(bool $exportBills): void
     {
         $this->exportBills = $exportBills;
     }
 
-    /**
-     * @param  bool  $exportBudgets
-     */
     public function setExportBudgets(bool $exportBudgets): void
     {
         $this->exportBudgets = $exportBudgets;
     }
 
-    /**
-     * @param  bool  $exportCategories
-     */
     public function setExportCategories(bool $exportCategories): void
     {
         $this->exportCategories = $exportCategories;
     }
 
-    /**
-     * @param  bool  $exportPiggies
-     */
     public function setExportPiggies(bool $exportPiggies): void
     {
         $this->exportPiggies = $exportPiggies;
     }
 
-    /**
-     * @param  bool  $exportRecurring
-     */
     public function setExportRecurring(bool $exportRecurring): void
     {
         $this->exportRecurring = $exportRecurring;
     }
 
-    /**
-     * @param  bool  $exportRules
-     */
     public function setExportRules(bool $exportRules): void
     {
         $this->exportRules = $exportRules;
     }
 
-    /**
-     * @param  bool  $exportTags
-     */
     public function setExportTags(bool $exportTags): void
     {
         $this->exportTags = $exportTags;
     }
 
-    /**
-     * @param  bool  $exportTransactions
-     */
     public function setExportTransactions(bool $exportTransactions): void
     {
         $this->exportTransactions = $exportTransactions;
     }
 
-    /**
-     * @param  Carbon  $start
-     */
     public function setStart(Carbon $start): void
     {
         $this->start = $start;
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function get(string $key, mixed $default = null): mixed
-    {
-        return null;
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function has(mixed $key): mixed
-    {
-        return null;
     }
 }

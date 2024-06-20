@@ -23,7 +23,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Services\Internal\Update;
 
-use Carbon\Carbon;
 use FireflyIII\Factory\PiggyBankEventFactory;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
@@ -40,32 +39,22 @@ use FireflyIII\Models\TransactionJournalMeta;
  */
 class GroupCloneService
 {
-    /**
-     * @param  TransactionGroup  $group
-     *
-     * @return TransactionGroup
-     */
     public function cloneGroup(TransactionGroup $group): TransactionGroup
     {
         $newGroup = $group->replicate();
         $newGroup->save();
         foreach ($group->transactionJournals as $journal) {
-            $this->cloneJournal($journal, $newGroup, (int)$group->id);
+            $this->cloneJournal($journal, $newGroup, $group->id);
         }
 
         return $newGroup;
     }
 
-    /**
-     * @param  TransactionJournal  $journal
-     * @param  TransactionGroup  $newGroup
-     * @param  int  $originalGroup
-     */
     private function cloneJournal(TransactionJournal $journal, TransactionGroup $newGroup, int $originalGroup): void
     {
         $newJournal                       = $journal->replicate();
         $newJournal->transaction_group_id = $newGroup->id;
-        $newJournal->date                 = Carbon::now();
+        $newJournal->date                 = now();
         $newJournal->save();
 
         foreach ($journal->transactions as $transaction) {
@@ -84,6 +73,7 @@ class GroupCloneService
         foreach ($journal->transactionJournalMeta as $meta) {
             $this->cloneMeta($meta, $newJournal);
         }
+
         // clone category
         /** @var Category $category */
         foreach ($journal->categories as $category) {
@@ -106,8 +96,8 @@ class GroupCloneService
 
         // add relation.
         // TODO clone ALL linked piggy banks
-        /** @var PiggyBankEvent $event */
-        $event = $journal->piggyBankEvents()->first();
+        /** @var null|PiggyBankEvent $event */
+        $event                            = $journal->piggyBankEvents()->first();
         if (null !== $event) {
             $piggyBank = $event->piggyBank;
             $factory   = app(PiggyBankEventFactory::class);
@@ -115,10 +105,6 @@ class GroupCloneService
         }
     }
 
-    /**
-     * @param  Transaction  $transaction
-     * @param  TransactionJournal  $newJournal
-     */
     private function cloneTransaction(Transaction $transaction, TransactionJournal $newJournal): void
     {
         $newTransaction                         = $transaction->replicate();
@@ -127,11 +113,6 @@ class GroupCloneService
         $newTransaction->save();
     }
 
-    /**
-     * @param  Note  $note
-     * @param  TransactionJournal  $newJournal
-     * @param  int  $oldGroupId
-     */
     private function cloneNote(Note $note, TransactionJournal $newJournal, int $oldGroupId): void
     {
         $newNote              = $note->replicate();
@@ -143,10 +124,6 @@ class GroupCloneService
         $newNote->save();
     }
 
-    /**
-     * @param  TransactionJournalMeta  $meta
-     * @param  TransactionJournal  $newJournal
-     */
     private function cloneMeta(TransactionJournalMeta $meta, TransactionJournal $newJournal): void
     {
         $newMeta                         = $meta->replicate();

@@ -24,68 +24,19 @@ declare(strict_types=1);
 namespace FireflyIII\Support\Request;
 
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidDateException;
 use Carbon\Exceptions\InvalidFormatException;
-use Log;
+use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface;
+use FireflyIII\Support\Facades\Steam;
+use Illuminate\Support\Collection;
 
 /**
  * Trait ConvertsDataTypes
  */
 trait ConvertsDataTypes
 {
-    /**
-     * Abstract method that always exists in the Request classes that use this
-     * trait, OR a stub needs to be added by any other class that uses this train.
-     *
-     * @param  string  $key
-     * @param  mixed|null  $default
-     * @return mixed
-     */
-    abstract public function get(string $key, mixed $default = null): mixed;
-
-    /**
-     * Abstract method that always exists in the Request classes that use this
-     * trait, OR a stub needs to be added by any other class that uses this train.
-     *
-     * @param mixed $key
-     * @return mixed
-     */
-    abstract public function has($key);
-    /**
-     * Return integer value.
-     *
-     * @param  string  $field
-     *
-     * @return int
-     */
-    public function convertInteger(string $field): int
-    {
-        return (int)$this->get($field);
-    }
-
-    /**
-     * Return string value.
-     *
-     * @param  string  $field
-     *
-     * @return string
-     */
-    public function convertString(string $field): string
-    {
-        return $this->clearString((string)($this->get($field) ?? ''), false);
-    }
-
-    /**
-     * @param  string|null  $string
-     * @param  bool  $keepNewlines
-     *
-     * @return string|null
-     */
-    public function clearString(?string $string, bool $keepNewlines = true): ?string
-    {
-        if (null === $string) {
-            return null;
-        }
-        $search       = [
+    private array $characters
+        = [
             "\0", // NUL
             "\f", // form feed
             "\v", // vertical tab
@@ -134,34 +85,123 @@ trait ConvertsDataTypes
             "\u{202F}", // narrow no-break space
             "\u{3000}", // ideographic space
             "\u{FEFF}", // zero width no -break space
+            "\r", // carriage return
         ];
-        $replace      = "\x20"; // plain old normal space
-        $string       = str_replace($search, $replace, $string);
-        $secondSearch = $keepNewlines ? ["\r"] : ["\r", "\n", "\t", "\036", "\025"];
-        $string       = str_replace($secondSearch, '', $string);
 
-        // clear zalgo text (TODO also in API v2)
-        $string = preg_replace('/\pM/u', '', $string);
+    /**
+     * Return integer value.
+     */
+    public function convertInteger(string $field): int
+    {
+        return (int)$this->get($field);
+    }
+
+    /**
+     * Abstract method that always exists in the Request classes that use this
+     * trait, OR a stub needs to be added by any other class that uses this train.
+     */
+    abstract public function get(string $key, mixed $default = null): mixed;
+
+    /**
+     * Return string value.
+     */
+    public function convertString(string $field): string
+    {
+        $entry = $this->get($field);
+        if (!is_scalar($entry)) {
+            return '';
+        }
+
+        return (string)$this->clearString((string)$entry);
+    }
+
+    public function convertIban(string $field): string
+    {
+        return Steam::filterSpaces($this->convertString($field));
+    }
+
+    public function clearString(?string $string): ?string
+    {
+        $string = $this->clearStringKeepNewlines($string);
+
+        if (null === $string) {
+            return null;
+        }
+        if ('' === $string) {
+            return '';
+        }
+
+        // then remove newlines too:
+        $string = str_replace(["\r", "\n", "\t", "\036", "\025"], '', $string);
 
         return trim($string);
     }
 
-    /**
-     * Return string value with newlines.
-     *
-     * @param  string  $field
-     *
-     * @return string
-     */
-    public function stringWithNewlines(string $field): string
+    public function clearIban(?string $string): ?string
     {
-        return $this->clearString((string)($this->get($field) ?? ''));
+        $string = $this->clearString($string);
+
+        return Steam::filterSpaces($string);
+    }
+
+    public function clearStringKeepNewlines(?string $string): ?string
+    {
+        if (null === $string) {
+            return null;
+        }
+        if ('' === $string) {
+            return '';
+        }
+        $string = str_replace($this->characters, "\x20", $string);
+
+        // clear zalgo text (TODO also in API v2)
+        $string = preg_replace('/(\pM{2})\pM+/u', '\1', $string);
+
+        return trim((string)$string);
     }
 
     /**
-     * @param  mixed  $array
+     * TODO duplicate, see SelectTransactionsRequest
      *
-     * @return array|null
+     * Validate list of accounts. This one is for V2 endpoints, so it searches for groups, not users.
+     */
+    public function getAccountList(): Collection
+    {
+        /** @var AccountRepositoryInterface $repository */
+        $repository = app(AccountRepositoryInterface::class);
+
+        if (method_exists($this, 'validateUserGroup')) { // @phpstan-ignore-line
+            $userGroup = $this->validateUserGroup($this);
+            $repository->setUserGroup($userGroup);
+        }
+
+        // set administration ID
+        // group ID
+
+        $set        = $this->get('accounts');
+        $collection = new Collection();
+        if (is_array($set)) {
+            foreach ($set as $accountId) {
+                $account = $repository->find((int)$accountId);
+                if (null !== $account) {
+                    $collection->push($account);
+                }
+            }
+        }
+
+        return $collection;
+    }
+
+    /**
+     * Return string value with newlines.
+     */
+    public function stringWithNewlines(string $field): string
+    {
+        return (string)$this->clearStringKeepNewlines((string)($this->get($field) ?? ''));
+    }
+
+    /**
+     * @param mixed $array
      */
     protected function arrayFromValue($array): ?array
     {
@@ -178,11 +218,6 @@ trait ConvertsDataTypes
         return null;
     }
 
-    /**
-     * @param  string|null  $value
-     *
-     * @return bool
-     */
     protected function convertBoolean(?string $value): bool
     {
         if (null === $value) {
@@ -204,12 +239,55 @@ trait ConvertsDataTypes
         return false;
     }
 
+    protected function convertDateTime(?string $string): ?Carbon
+    {
+        $value = $this->get((string)$string);
+        if (null === $value) {
+            return null;
+        }
+        if ('' === $value) {
+            return null;
+        }
+        if (10 === strlen($value)) {
+            // probably a date format.
+            try {
+                $carbon = Carbon::createFromFormat('Y-m-d', $value);
+            } catch (InvalidDateException $e) { // @phpstan-ignore-line
+                app('log')->error(sprintf('[1] "%s" is not a valid date: %s', $value, $e->getMessage()));
+
+                return null;
+            } catch (InvalidFormatException $e) { // @phpstan-ignore-line
+                app('log')->error(sprintf('[2] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+
+                return null;
+            }
+            if (null === $carbon) {
+                app('log')->error(sprintf('[2] "%s" is of an invalid format.', $value));
+
+                return null;
+            }
+
+            return $carbon;
+        }
+
+        // is an atom string, I hope?
+        try {
+            $carbon = Carbon::parse($value);
+        } catch (InvalidDateException $e) { // @phpstan-ignore-line
+            app('log')->error(sprintf('[3] "%s" is not a valid date or time: %s', $value, $e->getMessage()));
+
+            return null;
+        } catch (InvalidFormatException $e) {
+            app('log')->error(sprintf('[4] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+
+            return null;
+        }
+
+        return $carbon;
+    }
+
     /**
      * Return floating value.
-     *
-     * @param  string  $field
-     *
-     * @return float|null
      */
     protected function convertFloat(string $field): ?float
     {
@@ -221,11 +299,6 @@ trait ConvertsDataTypes
         return (float)$res;
     }
 
-    /**
-     * @param  string|null  $string
-     *
-     * @return Carbon|null
-     */
     protected function dateFromValue(?string $string): ?Carbon
     {
         if (null === $string) {
@@ -235,17 +308,18 @@ trait ConvertsDataTypes
             return null;
         }
         $carbon = null;
+
         try {
             $carbon = new Carbon($string, config('app.timezone'));
         } catch (InvalidFormatException $e) {
             // @ignoreException
         }
         if (null === $carbon) {
-            Log::debug(sprintf('Invalid date: %s', $string));
+            app('log')->debug(sprintf('Invalid date: %s', $string));
 
             return null;
         }
-        Log::debug(sprintf('Date object: %s (%s)', $carbon->toW3cString(), $carbon->getTimezone()));
+        app('log')->debug(sprintf('Date object: %s (%s)', $carbon->toW3cString(), $carbon->getTimezone()));
 
         return $carbon;
     }
@@ -253,18 +327,14 @@ trait ConvertsDataTypes
     /**
      * Returns all data in the request, or omits the field if not set,
      * according to the config from the request. This is the way.
-     *
-     * @param  array  $fields
-     *
-     * @return array
      */
     protected function getAllData(array $fields): array
     {
         $return = [];
         foreach ($fields as $field => $info) {
-            if ($this->has($info[0])) {
+            if (true === $this->has($info[0])) {
                 $method         = $info[1];
-                $return[$field] = $this->$method($info[0]);
+                $return[$field] = $this->{$method}($info[0]); // @phpstan-ignore-line
             }
         }
 
@@ -272,22 +342,29 @@ trait ConvertsDataTypes
     }
 
     /**
+     * Abstract method that always exists in the Request classes that use this
+     * trait, OR a stub needs to be added by any other class that uses this train.
+     *
+     * @param mixed $key
+     *
+     * @return mixed
+     */
+    abstract public function has($key);
+
+    /**
      * Return date or NULL.
-     *
-     * @param  string  $field
-     *
-     * @return Carbon|null
      */
     protected function getCarbonDate(string $field): ?Carbon
     {
         $result = null;
+
         try {
-            $result = $this->get($field) ? new Carbon($this->get($field)) : null;
+            $result = '' !== (string)$this->get($field) ? new Carbon((string)$this->get($field), config('app.timezone')) : null;
         } catch (InvalidFormatException $e) {
             // @ignoreException
         }
         if (null === $result) {
-            Log::debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
+            app('log')->debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
         }
 
         return $result;
@@ -295,10 +372,6 @@ trait ConvertsDataTypes
 
     /**
      * Parse to integer
-     *
-     * @param  string|null  $string
-     *
-     * @return int|null
      */
     protected function integerFromValue(?string $string): ?int
     {
@@ -314,14 +387,10 @@ trait ConvertsDataTypes
 
     /**
      * Return integer value, or NULL when it's not set.
-     *
-     * @param  string  $field
-     *
-     * @return int|null
      */
     protected function nullableInteger(string $field): ?int
     {
-        if (!$this->has($field)) {
+        if (false === $this->has($field)) {
             return null;
         }
 

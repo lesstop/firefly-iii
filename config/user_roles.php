@@ -22,19 +22,12 @@
 
 declare(strict_types=1);
 
+use FireflyIII\Enums\UserRoleEnum;
 
-use FireflyIII\Models\UserRole;
+$result = [];
 
-return [
+foreach (UserRoleEnum::cases() as $role) {
+    $result[$role->value] = [];
+}
 
-    'roles' => [
-        UserRole::READ_ONLY           => [],
-        UserRole::CHANGE_TRANSACTIONS => [],
-        UserRole::CHANGE_RULES        => [],
-        UserRole::CHANGE_PIGGY_BANKS  => [],
-        UserRole::CHANGE_REPETITIONS  => [],
-        UserRole::VIEW_REPORTS        => [],
-        UserRole::FULL                => [],
-        UserRole::OWNER               => [],
-    ],
-];
+return $result;

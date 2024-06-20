@@ -23,34 +23,28 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\System;
 
-use Artisan;
 use Cache;
 use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
-use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Support\Http\Controllers\GetConfigurationData;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Laravel\Passport\Passport;
-use Log;
-use phpseclib\Crypt\RSA as LegacyRSA;
 use phpseclib3\Crypt\RSA;
 
 /**
  * Class InstallController
- *
- * @codeCoverageIgnore
  */
 class InstallController extends Controller
 {
     use GetConfigurationData;
 
-    public const BASEDIR_ERROR   = 'Firefly III cannot execute the upgrade commands. It is not allowed to because of an open_basedir restriction.';
-    public const FORBIDDEN_ERROR = 'Internal PHP function "proc_close" is disabled for your installation. Auto-migration is not possible.';
-    public const OTHER_ERROR     = 'An unknown error prevented Firefly III from executing the upgrade commands. Sorry.';
+    public const string BASEDIR_ERROR   = 'Firefly III cannot execute the upgrade commands. It is not allowed to because of an open_basedir restriction.';
+    public const string FORBIDDEN_ERROR = 'Internal PHP function "proc_close" is disabled for your installation. Auto-migration is not possible.';
+    public const string OTHER_ERROR     = 'An unknown error prevented Firefly III from executing the upgrade commands. Sorry.';
     private string $lastError;
     private array  $upgradeCommands;
 
@@ -59,65 +53,21 @@ class InstallController extends Controller
      */
     public function __construct()
     {
+        parent::__construct();
         // empty on purpose.
         $this->upgradeCommands = [
-            // there are 3 initial commands
-            'migrate'                                  => ['--seed' => true, '--force' => true],
-            'firefly-iii:fix-pgsql-sequences'          => [],
-            'firefly-iii:decrypt-all'                  => [],
-            'firefly-iii:restore-oauth-keys'           => [],
-            'generate-keys'                            => [], // an exception :(
-
-            // upgrade commands
-            'firefly-iii:transaction-identifiers'      => [],
-            'firefly-iii:migrate-to-groups'            => [],
-            'firefly-iii:account-currencies'           => [],
-            'firefly-iii:transfer-currencies'          => [],
-            'firefly-iii:other-currencies'             => [],
-            'firefly-iii:migrate-notes'                => [],
-            'firefly-iii:migrate-attachments'          => [],
-            'firefly-iii:bills-to-rules'               => [],
-            'firefly-iii:bl-currency'                  => [],
-            'firefly-iii:cc-liabilities'               => [],
-            'firefly-iii:back-to-journals'             => [],
-            'firefly-iii:rename-account-meta'          => [],
-            'firefly-iii:migrate-recurrence-meta'      => [],
-            'firefly-iii:migrate-tag-locations'        => [],
-            'firefly-iii:migrate-recurrence-type'      => [],
-            'firefly-iii:upgrade-liabilities'          => [],
-            'firefly-iii:create-group-memberships'     => [],
-
-            // verify commands
-            'firefly-iii:fix-piggies'                  => [],
-            'firefly-iii:create-link-types'            => [],
-            'firefly-iii:create-access-tokens'         => [],
-            'firefly-iii:remove-bills'                 => [],
-            'firefly-iii:fix-negative-limits'          => [],
-            'firefly-iii:enable-currencies'            => [],
-            'firefly-iii:fix-transfer-budgets'         => [],
-            'firefly-iii:fix-uneven-amount'            => [],
-            'firefly-iii:delete-zero-amount'           => [],
-            'firefly-iii:delete-orphaned-transactions' => [],
-            'firefly-iii:delete-empty-journals'        => [],
-            'firefly-iii:delete-empty-groups'          => [],
-            'firefly-iii:fix-account-types'            => [],
-            'firefly-iii:fix-account-order'            => [],
-            'firefly-iii:rename-meta-fields'           => [],
-            'firefly-iii:fix-ob-currencies'            => [],
-            'firefly-iii:fix-long-descriptions'        => [],
-            'firefly-iii:fix-recurring-transactions'   => [],
-            'firefly-iii:unify-group-accounts'         => [],
-            'firefly-iii:fix-transaction-types'        => [],
-            'firefly-iii:fix-frontpage-accounts'       => [],
-            'firefly-iii:fix-ibans'                    => [],
-            'firefly-iii:upgrade-group-information'    => [],
-
-            // final command to set latest version in DB
-            'firefly-iii:set-latest-version'           => ['--james-is-cool' => true],
-            'firefly-iii:verify-security-alerts'       => [],
+            // there are 5 initial commands
+            // Check 4 places: InstallController, Docker image, UpgradeDatabase, composer.json
+            'migrate'                            => ['--seed' => true, '--force' => true],
+            'generate-keys'                      => [], // an exception :(
+            'firefly-iii:upgrade-database'       => [],
+            'firefly-iii:correct-database'       => [],
+            'firefly-iii:report-integrity'       => [],
+            'firefly-iii:set-latest-version'     => ['--james-is-cool' => true],
+            'firefly-iii:verify-security-alerts' => [],
         ];
 
-        $this->lastError = '';
+        $this->lastError       = '';
     }
 
     /**
@@ -127,6 +77,7 @@ class InstallController extends Controller
      */
     public function index()
     {
+        app('view')->share('FF_VERSION', config('firefly.version'));
         // index will set FF3 version.
         app('fireflyconfig')->set('ff3_version', (string)config('firefly.version'));
 
@@ -136,42 +87,30 @@ class InstallController extends Controller
         return view('install.index');
     }
 
-    /**
-     * @param  Request  $request
-     *
-     * @return JsonResponse
-     */
     public function runCommand(Request $request): JsonResponse
     {
         $requestIndex = (int)$request->get('index');
         $response     = [
             'hasNextCommand' => false,
             'done'           => true,
-            'next'           => 0,
             'previous'       => null,
             'error'          => false,
             'errorMessage'   => null,
         ];
 
-        Log::debug(sprintf('Will now run commands. Request index is %d', $requestIndex));
-        $index = 0;
-        /**
-         * @var string $command
-         * @var array $args
-         */
-        foreach ($this->upgradeCommands as $command => $args) {
-            Log::debug(sprintf('Current command is "%s", index is %d', $command, $index));
-            if ($index < $requestIndex) {
-                Log::debug('Will not execute.');
-                $index++;
-                continue;
-            }
+        app('log')->debug(sprintf('Will now run commands. Request index is %d', $requestIndex));
+        $indexes      = array_values(array_keys($this->upgradeCommands));
+        if (array_key_exists($requestIndex, $indexes)) {
+            $command                    = $indexes[$requestIndex];
+            $parameters                 = $this->upgradeCommands[$command];
+            app('log')->debug(sprintf('Will now execute command "%s" with parameters', $command), $parameters);
+
             try {
-                $result = $this->executeCommand($command, $args);
+                $result = $this->executeCommand($command, $parameters);
             } catch (FireflyException $e) {
-                Log::error($e->getMessage());
-                Log::error($e->getTraceAsString());
-                if (strpos($e->getMessage(), 'open_basedir restriction in effect')) {
+                app('log')->error($e->getMessage());
+                app('log')->error($e->getTraceAsString());
+                if (str_contains($e->getMessage(), 'open_basedir restriction in effect')) {
                     $this->lastError = self::BASEDIR_ERROR;
                 }
                 $result          = false;
@@ -183,38 +122,34 @@ class InstallController extends Controller
 
                 return response()->json($response);
             }
-            $index++;
-            $response['hasNextCommand'] = true;
+            $response['hasNextCommand'] = array_key_exists($requestIndex + 1, $indexes);
             $response['previous']       = $command;
         }
-        $response['next'] = $index;
 
         return response()->json($response);
     }
 
     /**
-     * @param  string  $command
-     * @param  array  $args
      * @throws FireflyException
-     * @return bool
      */
     private function executeCommand(string $command, array $args): bool
     {
-        Log::debug(sprintf('Will now call command %s with args.', $command), $args);
+        app('log')->debug(sprintf('Will now call command %s with args.', $command), $args);
+
         try {
             if ('generate-keys' === $command) {
                 $this->keys();
             }
             if ('generate-keys' !== $command) {
-                Artisan::call($command, $args);
-                Log::debug(Artisan::output());
+                \Artisan::call($command, $args);
+                app('log')->debug(\Artisan::output());
             }
-        } catch (Exception $e) { // intentional generic exception
+        } catch (\Exception $e) { // intentional generic exception
             throw new FireflyException($e->getMessage(), 0, $e);
         }
         // clear cache as well.
-        Cache::clear();
-        Preferences::mark();
+        \Cache::clear();
+        app('preferences')->mark();
 
         return true;
     }
@@ -224,21 +159,7 @@ class InstallController extends Controller
      */
     public function keys(): void
     {
-        // switch on PHP version.
-        $keys = [];
-        // switch on class existence.
-        Log::info(sprintf('PHP version is %s', phpversion()));
-        if (class_exists(LegacyRSA::class)) {
-            // PHP 7
-            Log::info('Will run PHP7 code.');
-            $keys = (new LegacyRSA())->createKey(4096);
-        }
-
-        if (!class_exists(LegacyRSA::class)) {
-            // PHP 8
-            Log::info('Will run PHP8 code.');
-            $keys = RSA::createKey(4096);
-        }
+        $key                      = RSA::createKey(4096);
 
         [$publicKey, $privateKey] = [
             Passport::keyPath('oauth-public.key'),
@@ -249,7 +170,7 @@ class InstallController extends Controller
             return;
         }
 
-        file_put_contents($publicKey, $keys['publickey']);
-        file_put_contents($privateKey, $keys['privatekey']);
+        file_put_contents($publicKey, (string)$key->getPublicKey());
+        file_put_contents($privateKey, $key->toString('PKCS1'));
     }
 }

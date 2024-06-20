@@ -28,14 +28,14 @@ use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Class PreferenceUpdateRequest
+ */
 class PreferenceUpdateRequest extends FormRequest
 {
     use ChecksLogin;
     use ConvertsDataTypes;
 
-    /**
-     * @return array
-     */
     public function getAll(): array
     {
         $array = [

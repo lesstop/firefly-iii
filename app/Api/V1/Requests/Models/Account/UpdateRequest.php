@@ -33,22 +33,16 @@ use FireflyIII\Support\Request\AppendsLocationData;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
-use Log;
 
 /**
  * Class UpdateRequest
- *
- * @codeCoverageIgnore
  */
 class UpdateRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use AppendsLocationData;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
-    /**
-     * @return array
-     */
     public function getUpdateData(): array
     {
         $fields = [
@@ -57,15 +51,15 @@ class UpdateRequest extends FormRequest
             'include_net_worth'       => ['include_net_worth', 'boolean'],
             'account_type_name'       => ['type', 'convertString'],
             'virtual_balance'         => ['virtual_balance', 'convertString'],
-            'iban'                    => ['iban', 'convertString'],
+            'iban'                    => ['iban', 'convertIban'],
             'BIC'                     => ['bic', 'convertString'],
             'account_number'          => ['account_number', 'convertString'],
             'account_role'            => ['account_role', 'convertString'],
             'liability_type'          => ['liability_type', 'convertString'],
             'opening_balance'         => ['opening_balance', 'convertString'],
-            'opening_balance_date'    => ['opening_balance_date', 'date'],
+            'opening_balance_date'    => ['opening_balance_date', 'convertDateTime'],
             'cc_type'                 => ['credit_card_type', 'convertString'],
-            'cc_monthly_payment_date' => ['monthly_payment_date', 'convertString'],
+            'cc_monthly_payment_date' => ['monthly_payment_date', 'convertDateTime'],
             'notes'                   => ['notes', 'stringWithNewlines'],
             'interest'                => ['interest', 'convertString'],
             'interest_period'         => ['interest_period', 'convertString'],
@@ -76,28 +70,13 @@ class UpdateRequest extends FormRequest
             'liability_amount'        => ['liability_amount', 'convertString'],
             'liability_start_date'    => ['liability_start_date', 'date'],
         ];
-        /** @var Account $account */
-        $account = $this->route()->parameter('account');
-        $data    = $this->getAllData($fields);
-        $data    = $this->appendLocationData($data, null);
-        $valid   = config('firefly.valid_liabilities');
-        if (array_key_exists('liability_amount', $data) && in_array($account->accountType->type, $valid, true)) {
-            $data['opening_balance'] = app('steam')->negative($data['liability_amount']);
-            Log::debug(sprintf('Opening balance for liability is "%s".', $data['opening_balance']));
-        }
+        $data   = $this->getAllData($fields);
 
-        if (array_key_exists('liability_start_date', $data) && in_array($account->accountType->type, $valid, true)) {
-            $data['opening_balance_date'] = $data['liability_start_date'];
-            Log::debug(sprintf('Opening balance date for liability is "%s".', $data['opening_balance_date']));
-        }
-
-        return $data;
+        return $this->appendLocationData($data, null);
     }
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -107,28 +86,28 @@ class UpdateRequest extends FormRequest
         $types          = implode(',', array_keys(config('firefly.subTitlesByIdentifier')));
         $ccPaymentTypes = implode(',', array_keys(config('firefly.ccTypes')));
 
-        $rules = [
-            'name'                 => sprintf('min:1|uniqueAccountForUser:%d', $account->id),
+        $rules          = [
+            'name'                 => sprintf('min:1|max:1024|uniqueAccountForUser:%d', $account->id),
             'type'                 => sprintf('in:%s', $types),
             'iban'                 => ['iban', 'nullable', new UniqueIban($account, $this->convertString('type'))],
             'bic'                  => 'bic|nullable',
-            'account_number'       => ['between:1,255', 'nullable', new UniqueAccountNumber($account, $this->convertString('type'))],
+            'account_number'       => ['min:1', 'max:255', 'nullable', new UniqueAccountNumber($account, $this->convertString('type'))],
             'opening_balance'      => 'numeric|required_with:opening_balance_date|nullable',
             'opening_balance_date' => 'date|required_with:opening_balance|nullable',
             'virtual_balance'      => 'numeric|nullable',
             'order'                => 'numeric|nullable',
             'currency_id'          => 'numeric|exists:transaction_currencies,id',
-            'currency_code'        => 'min:3|max:3|exists:transaction_currencies,code',
+            'currency_code'        => 'min:3|max:51|exists:transaction_currencies,code',
             'active'               => [new IsBoolean()],
             'include_net_worth'    => [new IsBoolean()],
             'account_role'         => sprintf('in:%s|nullable|required_if:type,asset', $accountRoles),
             'credit_card_type'     => sprintf('in:%s|nullable|required_if:account_role,ccAsset', $ccPaymentTypes),
-            'monthly_payment_date' => 'date'.'|nullable|required_if:account_role,ccAsset|required_if:credit_card_type,monthlyFull',
+            'monthly_payment_date' => 'date|nullable|required_if:account_role,ccAsset|required_if:credit_card_type,monthlyFull',
             'liability_type'       => 'required_if:type,liability|in:loan,debt,mortgage',
             'liability_direction'  => 'required_if:type,liability|in:credit,debit',
-            'interest'             => 'required_if:type,liability|between:0,100|numeric',
+            'interest'             => 'required_if:type,liability|min:0|max:100|numeric',
             'interest_period'      => 'required_if:type,liability|in:daily,monthly,yearly',
-            'notes'                => 'min:0|max:65536',
+            'notes'                => 'min:0|max:32768',
         ];
 
         return Location::requestRules($rules);

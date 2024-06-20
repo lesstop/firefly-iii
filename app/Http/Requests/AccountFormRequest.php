@@ -23,27 +23,31 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Location;
+use FireflyIII\Rules\IsValidAmount;
 use FireflyIII\Rules\UniqueIban;
 use FireflyIII\Support\Request\AppendsLocationData;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Validator;
 
 /**
  * Class AccountFormRequest.
  */
 class AccountFormRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use AppendsLocationData;
     use ChecksLogin;
+    use ConvertsDataTypes;
+
+    protected array $acceptedRoles = [UserRoleEnum::MANAGE_TRANSACTIONS];
 
     /**
      * Get all data.
-     *
-     * @return array
      */
     public function getAccountData(): array
     {
@@ -53,7 +57,7 @@ class AccountFormRequest extends FormRequest
             'account_type_name'       => $this->convertString('objectType'),
             'currency_id'             => $this->convertInteger('currency_id'),
             'virtual_balance'         => $this->convertString('virtual_balance'),
-            'iban'                    => $this->convertString('iban'),
+            'iban'                    => $this->convertIban('iban'),
             'BIC'                     => $this->convertString('BIC'),
             'account_number'          => $this->convertString('account_number'),
             'account_role'            => $this->convertString('account_role'),
@@ -82,7 +86,8 @@ class AccountFormRequest extends FormRequest
             $data['account_type_name'] = null;
             $data['account_type_id']   = $this->convertInteger('liability_type_id');
             if ('' !== $data['opening_balance']) {
-                $data['opening_balance'] = app('steam')->negative($data['opening_balance']);
+                // opening balance is always positive for liabilities
+                $data['opening_balance'] = app('steam')->positive($data['opening_balance']);
             }
         }
 
@@ -91,8 +96,6 @@ class AccountFormRequest extends FormRequest
 
     /**
      * Rules for this request.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -100,14 +103,14 @@ class AccountFormRequest extends FormRequest
         $types          = implode(',', array_keys(config('firefly.subTitlesByIdentifier')));
         $ccPaymentTypes = implode(',', array_keys(config('firefly.ccTypes')));
         $rules          = [
-            'name'                               => 'required|min:1|uniqueAccountForUser',
-            'opening_balance'                    => 'numeric|nullable|max:1000000000',
+            'name'                               => 'required|max:1024|min:1|uniqueAccountForUser',
+            'opening_balance'                    => ['nullable', new IsValidAmount()],
             'opening_balance_date'               => 'date|required_with:opening_balance|nullable',
             'iban'                               => ['iban', 'nullable', new UniqueIban(null, $this->convertString('objectType'))],
             'BIC'                                => 'bic|nullable',
-            'virtual_balance'                    => 'numeric|nullable|max:1000000000',
+            'virtual_balance'                    => ['nullable', new IsValidAmount()],
             'currency_id'                        => 'exists:transaction_currencies,id',
-            'account_number'                     => 'between:1,255|uniqueAccountNumberForUser|nullable',
+            'account_number'                     => 'min:1|max:255|uniqueAccountNumberForUser|nullable',
             'account_role'                       => 'in:'.$accountRoles,
             'active'                             => 'boolean',
             'cc_type'                            => 'in:'.$ccPaymentTypes,
@@ -115,18 +118,26 @@ class AccountFormRequest extends FormRequest
             'amount_currency_id_virtual_balance' => 'exists:transaction_currencies,id',
             'what'                               => 'in:'.$types,
             'interest_period'                    => 'in:daily,monthly,yearly',
+            'notes'                              => 'min:1|max:32768|nullable',
         ];
         $rules          = Location::requestRules($rules);
 
-        /** @var Account $account */
-        $account = $this->route()->parameter('account');
+        /** @var null|Account $account */
+        $account        = $this->route()->parameter('account');
         if (null !== $account) {
             // add rules:
             $rules['id']   = 'belongsToUser:accounts';
-            $rules['name'] = 'required|min:1|uniqueAccountForUser:'.$account->id;
+            $rules['name'] = 'required|max:1024|min:1|uniqueAccountForUser:'.$account->id;
             $rules['iban'] = ['iban', 'nullable', new UniqueIban($account, $account->accountType->type)];
         }
 
         return $rules;
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 }

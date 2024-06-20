@@ -23,23 +23,24 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
-use JsonException;
 
 /**
  * Class AccountMeta
  *
- * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property int $account_id
- * @property string $name
- * @property mixed $data
- * @property-read Account $account
+ * @property int         $id
+ * @property null|Carbon $created_at
+ * @property null|Carbon $updated_at
+ * @property int         $account_id
+ * @property string      $name
+ * @property mixed       $data
+ * @property Account     $account
+ *
  * @method static Builder|AccountMeta newModelQuery()
  * @method static Builder|AccountMeta newQuery()
  * @method static Builder|AccountMeta query()
@@ -49,52 +50,35 @@ use JsonException;
  * @method static Builder|AccountMeta whereId($value)
  * @method static Builder|AccountMeta whereName($value)
  * @method static Builder|AccountMeta whereUpdatedAt($value)
+ *
  * @mixin Eloquent
  */
 class AccountMeta extends Model
 {
-    /**
-     * The attributes that should be casted to native types.
-     *
-     * @var array
-     */
+    use ReturnsIntegerIdTrait;
+
     protected $casts
-        = [
+                        = [
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
-    /** @var array Fields that can be filled */
-    protected $fillable = ['account_id', 'name', 'data'];
-    /** @var string The table to store the data in */
-    protected $table = 'account_meta';
 
-    /**
-     * @return BelongsTo
-     * @codeCoverageIgnore
-     */
+    protected $fillable = ['account_id', 'name', 'data'];
+
+    /** @var string The table to store the data in */
+    protected $table    = 'account_meta';
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
     }
 
-    /**
-     * @param  mixed  $value
-     *
-     * @return mixed
-     * @throws JsonException
-     * @codeCoverageIgnore
-     */
-    public function getDataAttribute($value)
+    public function getDataAttribute(mixed $value): string
     {
-        return json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        return (string)json_decode($value, true);
     }
 
-    /**
-     * @param  mixed  $value
-     *
-     * @codeCoverageIgnore
-     */
-    public function setDataAttribute($value): void
+    public function setDataAttribute(mixed $value): void
     {
         $this->attributes['data'] = json_encode($value);
     }

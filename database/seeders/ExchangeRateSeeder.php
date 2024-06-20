@@ -28,88 +28,73 @@ use FireflyIII\Models\CurrencyExchangeRate;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Collection;
-use Log;
 
 /**
  * Class ExchangeRateSeeder
  */
 class ExchangeRateSeeder extends Seeder
 {
-    private Collection $users;
-
-    /**
-     * @return void
-     */
     public function run(): void
     {
-        $count = User::count();
+        $count  = User::count();
         if (0 === $count) {
-            Log::debug('Will not seed exchange rates yet.');
+            app('log')->debug('Will not seed exchange rates yet.');
+
             return;
         }
         $users  = User::get();
         $date   = config('cer.date');
         $rates  = config('cer.rates');
         $usable = [];
-        foreach ($rates as $rate) {
-            $from = $this->getCurrency($rate[0]);
-            $to   = $this->getCurrency($rate[1]);
-            if (null !== $from && null !== $to) {
-                $usable[] = [$from, $to, $rate[2]];
+        $euro   = $this->getCurrency('EUR');
+        if (null === $euro) {
+            return;
+        }
+        foreach ($rates as $currencyCode => $rate) {
+            // grab opposing currency
+            $foreign = $this->getCurrency($currencyCode);
+            if (null !== $foreign) {
+                // save rate in array:
+                $usable[] = [$foreign, $rate];
             }
         }
-        unset($rates, $from, $to, $rate);
+        unset($rates, $foreign, $rate);
 
+        // for each user, for each rate, check and save
         /** @var User $user */
         foreach ($users as $user) {
             foreach ($usable as $rate) {
-                if (!$this->hasRate($user, $rate[0], $rate[1], $date)) {
-                    $this->addRate($user, $rate[0], $rate[1], $date, $rate[2]);
+                if (!$this->hasRate($user, $euro, $rate[0], $date)) {
+                    $this->addRate($user, $euro, $rate[0], $date, $rate[1]);
                 }
             }
         }
     }
 
-    /**
-     * @param  string  $code
-     * @return TransactionCurrency|null
-     */
     private function getCurrency(string $code): ?TransactionCurrency
     {
         return TransactionCurrency::whereNull('deleted_at')->where('code', $code)->first();
     }
 
-    /**
-     * @param  User  $user
-     * @param  TransactionCurrency  $from
-     * @param  TransactionCurrency  $to
-     * @param  string  $date
-     * @return bool
-     */
     private function hasRate(User $user, TransactionCurrency $from, TransactionCurrency $to, string $date): bool
     {
         return $user->currencyExchangeRates()
-                    ->where('from_currency_id', $from->id)
-                    ->where('to_currency_id', $to->id)
-                    ->where('date', $date)
-                    ->count() > 0;
+            ->where('from_currency_id', $from->id)
+            ->where('to_currency_id', $to->id)
+            ->where('date', $date)
+            ->count() > 0
+        ;
     }
 
     /**
-     * @param  User  $user
-     * @param  TransactionCurrency  $from
-     * @param  TransactionCurrency  $to
-     * @param  string  $date
-     * @param  float  $rate
-     * @return void
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     private function addRate(User $user, TransactionCurrency $from, TransactionCurrency $to, string $date, float $rate): void
     {
-        /** @var User $user */
         CurrencyExchangeRate::create(
             [
                 'user_id'          => $user->id,
+                'user_group_id'    => $user->user_group_id ?? null,
                 'from_currency_id' => $from->id,
                 'to_currency_id'   => $to->id,
                 'date'             => $date,

@@ -23,25 +23,19 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support;
 
-use Cache;
-use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Preference;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use PDOException;
-use Session;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Session;
 
 /**
  * Class Preferences.
- *
- * @codeCoverageIgnore
  */
 class Preferences
 {
-    /**
-     * @return Collection
-     */
     public function all(): Collection
     {
         $user = auth()->user();
@@ -49,19 +43,19 @@ class Preferences
             return new Collection();
         }
 
-        return Preference::where('user_id', $user->id)->get();
+        return Preference::where('user_id', $user->id)
+            ->where('name', '!=', 'currencyPreference')
+            ->where(function (Builder $q) use ($user): void {
+                $q->whereNull('user_group_id');
+                $q->orWhere('user_group_id', $user->user_group_id);
+            })
+            ->get()
+        ;
     }
 
-    /**
-     * @param  string  $name
-     * @param  mixed  $default
-     *
-     * @return Preference|null
-     * @throws FireflyException
-     */
-    public function get(string $name, $default = null): ?Preference
+    public function get(string $name, null|array|bool|int|string $default = null): ?Preference
     {
-        /** @var User|null $user */
+        /** @var null|User $user */
         $user = auth()->user();
         if (null === $user) {
             $preference       = new Preference();
@@ -73,17 +67,12 @@ class Preferences
         return $this->getForUser($user, $name, $default);
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $name
-     * @param  null|string|int  $default
-     *
-     * @return Preference|null
-     * @throws FireflyException
-     */
-    public function getForUser(User $user, string $name, $default = null): ?Preference
+    public function getForUser(User $user, string $name, null|array|bool|int|string $default = null): ?Preference
     {
-        $preference = Preference::where('user_id', $user->id)->where('name', $name)->first(['id', 'user_id', 'name', 'data', 'updated_at', 'created_at']);
+        // don't care about user group ID, except for some specific preferences.
+        $userGroupId = $this->getUserGroupId($user, $name);
+        $preference  = Preference::where('user_group_id', $userGroupId)->where('user_id', $user->id)->where('name', $name)->first(['id', 'user_id', 'name', 'data', 'updated_at', 'created_at']);
+
         if (null !== $preference && null === $preference->data) {
             $preference->delete();
             $preference = null;
@@ -101,12 +90,17 @@ class Preferences
         return $this->setForUser($user, $name, $default);
     }
 
-    /**
-     * @param  string  $name
-     *
-     * @return bool
-     * @throws FireflyException
-     */
+    private function getUserGroupId(User $user, string $preferenceName): ?int
+    {
+        $groupId = null;
+        $items   = config('firefly.admin_specific_prefs') ?? [];
+        if (in_array($preferenceName, $items, true)) {
+            $groupId = (int)$user->user_group_id;
+        }
+
+        return $groupId;
+    }
+
     public function delete(string $name): bool
     {
         $fullName = sprintf('preference%s%s', auth()->user()->id, $name);
@@ -118,10 +112,6 @@ class Preferences
         return true;
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $name
-     */
     public function forget(User $user, string $name): void
     {
         $key = sprintf('preference%s%s', $user->id, $name);
@@ -129,20 +119,14 @@ class Preferences
         Cache::put($key, '', 5);
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $name
-     * @param  mixed  $value
-     *
-     * @return Preference
-     * @throws FireflyException
-     */
-    public function setForUser(User $user, string $name, $value): Preference
+    public function setForUser(User $user, string $name, null|array|bool|int|string $value): Preference
     {
-        $fullName = sprintf('preference%s%s', $user->id, $name);
+        $fullName   = sprintf('preference%s%s', $user->id, $name);
+        $groupId    = $this->getUserGroupId($user, $name);
         Cache::forget($fullName);
-        /** @var Preference|null $pref */
-        $pref = Preference::where('user_id', $user->id)->where('name', $name)->first(['id', 'name', 'data', 'updated_at', 'created_at']);
+
+        /** @var null|Preference $pref */
+        $pref       = Preference::where('user_group_id', $groupId)->where('user_id', $user->id)->where('name', $name)->first(['id', 'name', 'data', 'updated_at', 'created_at']);
 
         if (null !== $pref && null === $value) {
             $pref->delete();
@@ -153,52 +137,43 @@ class Preferences
             return new Preference();
         }
         if (null === $pref) {
-            $pref          = new Preference();
-            $pref->user_id = $user->id;
-            $pref->name    = $name;
+            $pref                = new Preference();
+            $pref->user_id       = (int)$user->id;
+            $pref->user_group_id = $groupId;
+            $pref->name          = $name;
         }
         $pref->data = $value;
-        try {
-            $pref->save();
-        } catch (PDOException $e) {
-            throw new FireflyException(sprintf('Could not save preference: %s', $e->getMessage()), 0, $e);
-        }
+        $pref->save();
         Cache::forever($fullName, $pref);
 
         return $pref;
     }
 
-    /**
-     * @param  User  $user
-     * @param  string  $search
-     *
-     * @return Collection
-     */
     public function beginsWith(User $user, string $search): Collection
     {
         return Preference::where('user_id', $user->id)->where('name', 'LIKE', $search.'%')->get();
     }
 
     /**
-     * @param  string  $name
-     *
-     * @return Collection
+     * Find by name, has no user ID in it, because the method is called from an unauthenticated route any way.
      */
     public function findByName(string $name): Collection
     {
         return Preference::where('name', $name)->get();
     }
 
-    /**
-     * @param  User  $user
-     * @param  array  $list
-     *
-     * @return array
-     */
     public function getArrayForUser(User $user, array $list): array
     {
         $result      = [];
-        $preferences = Preference::where('user_id', $user->id)->whereIn('name', $list)->get(['id', 'name', 'data']);
+        $preferences = Preference::where('user_id', $user->id)
+            ->where(function (Builder $q) use ($user): void {
+                $q->whereNull('user_group_id');
+                $q->orWhere('user_group_id', $user->user_group_id);
+            })
+            ->whereIn('name', $list)
+            ->get(['id', 'name', 'data'])
+        ;
+
         /** @var Preference $preference */
         foreach ($preferences as $preference) {
             $result[$preference->name] = $preference->data;
@@ -212,16 +187,9 @@ class Preferences
         return $result;
     }
 
-    /**
-     * @param  string  $name
-     * @param  mixed  $default
-     *
-     * @return Preference|null
-     * @throws FireflyException
-     */
-    public function getFresh(string $name, $default = null): ?Preference
+    public function getFresh(string $name, null|array|bool|int|string $default = null): ?Preference
     {
-        /** @var User|null $user */
+        /** @var null|User $user */
         $user = auth()->user();
         if (null === $user) {
             $preference       = new Preference();
@@ -230,25 +198,10 @@ class Preferences
             return $preference;
         }
 
-        return $this->getFreshForUser($user, $name, $default);
-    }
-
-    /**
-     * @param  User  $user
-     * @param  string  $name
-     * @param  null  $default
-     *
-     * @return Preference|null
-     * TODO remove me.
-     * @throws FireflyException
-     */
-    public function getFreshForUser(User $user, string $name, $default = null): ?Preference
-    {
         return $this->getForUser($user, $name, $default);
     }
 
     /**
-     * @return string
      * @throws FireflyException
      */
     public function lastActivity(): string
@@ -263,27 +216,18 @@ class Preferences
             $lastActivity = implode(',', $lastActivity);
         }
 
-        return hash('sha256', $lastActivity);
+        return hash('sha256', (string)$lastActivity);
     }
 
-    /**
-     *
-     */
     public function mark(): void
     {
         $this->set('lastActivity', microtime());
         Session::forget('first');
     }
 
-    /**
-     * @param  string  $name
-     * @param  mixed  $value
-     *
-     * @return Preference
-     * @throws FireflyException
-     */
-    public function set(string $name, $value): Preference
+    public function set(string $name, null|array|bool|int|string $value): Preference
     {
+        /** @var null|User $user */
         $user = auth()->user();
         if (null === $user) {
             // make new preference, return it:
@@ -294,6 +238,6 @@ class Preferences
             return $pref;
         }
 
-        return $this->setForUser(auth()->user(), $name, $value);
+        return $this->setForUser($user, $name, $value);
     }
 }

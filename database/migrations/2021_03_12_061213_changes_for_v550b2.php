@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -33,38 +34,52 @@ class ChangesForV550b2 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
-        Schema::table(
-            'recurrences_transactions',
-            function (Blueprint $table) {
-                $table->dropForeign('type_foreign');
-                if (Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
-                    $table->dropColumn('transaction_type_id');
-                }
+        if (Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
+            try {
+                Schema::table(
+                    'recurrences_transactions',
+                    static function (Blueprint $table): void {
+                        if ('sqlite' !== config('database.default')) {
+                            $table->dropForeign('type_foreign');
+                        }
+                        if (Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
+                            $table->dropColumn('transaction_type_id');
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
         // expand recurrence transaction table
-        Schema::table(
-            'recurrences_transactions',
-            function (Blueprint $table) {
-                if (!Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
-                    $table->integer('transaction_type_id', false, true)->nullable()->after('transaction_currency_id');
-                    $table->foreign('transaction_type_id', 'type_foreign')->references('id')->on('transaction_types')->onDelete('set null');
-                }
+        if (!Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
+            try {
+                Schema::table(
+                    'recurrences_transactions',
+                    static function (Blueprint $table): void {
+                        if (!Schema::hasColumn('recurrences_transactions', 'transaction_type_id')) {
+                            $table->integer('transaction_type_id', false, true)->nullable()->after('transaction_currency_id');
+                            $table->foreign('transaction_type_id', 'type_foreign')->references('id')->on('transaction_types')->onDelete('set null');
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

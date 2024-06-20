@@ -32,9 +32,6 @@ use Twig\TwigFunction;
  */
 class Translation extends AbstractExtension
 {
-    /**
-     * @return array
-     */
     public function getFilters(): array
     {
         return [
@@ -48,19 +45,14 @@ class Translation extends AbstractExtension
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getFunctions(): array
     {
         return [
             $this->journalLinkTranslation(),
+            $this->laravelTranslation(),
         ];
     }
 
-    /**
-     * @return TwigFunction
-     */
     public function journalLinkTranslation(): TwigFunction
     {
         return new TwigFunction(
@@ -75,6 +67,21 @@ class Translation extends AbstractExtension
                 return $translation;
             },
             ['is_safe' => ['html']]
+        );
+    }
+
+    public function laravelTranslation(): TwigFunction
+    {
+        return new TwigFunction(
+            '__',
+            static function (string $key) {
+                $translation = trans($key);
+                if ($key === $translation) {
+                    return $key;
+                }
+
+                return $translation;
+            }
         );
     }
 }

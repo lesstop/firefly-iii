@@ -23,52 +23,55 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
-use DB;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
-use Log;
+use FireflyIII\TransactionRules\Traits\RefreshNotesTrait;
 
 /**
  * Class SetDescription.
  */
 class SetDescription implements ActionInterface
 {
+    use RefreshNotesTrait;
+
     private RuleAction $action;
 
     /**
      * TriggerInterface constructor.
-     *
-     * @param  RuleAction  $action
      */
     public function __construct(RuleAction $action)
     {
         $this->action = $action;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function actOnArray(array $journal): bool
     {
+        $this->refreshNotes($journal);
+
         /** @var TransactionJournal $object */
         $object = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
         $before = $object->description;
+        $after  = $this->action->getValue($journal);
 
-        DB::table('transaction_journals')
-          ->where('id', '=', $journal['transaction_journal_id'])
-          ->update(['description' => $this->action->action_value]);
+        // replace newlines.
+        $after  = str_replace(["\r", "\n", "\t", "\036", "\025"], '', $after);
 
-        Log::debug(
+        \DB::table('transaction_journals')
+            ->where('id', '=', $journal['transaction_journal_id'])
+            ->update(['description' => $after])
+        ;
+
+        app('log')->debug(
             sprintf(
                 'RuleAction SetDescription changed the description of journal #%d from "%s" to "%s".',
                 $journal['transaction_journal_id'],
                 $journal['description'],
-                $this->action->action_value
+                $after
             )
         );
         $object->refresh();
-        event(new TriggeredAuditLog($this->action->rule, $object, 'update_description', $before, $this->action->action_value));
+        event(new TriggeredAuditLog($this->action->rule, $object, 'update_description', $before, $after));
 
         return true;
     }

@@ -54,16 +54,12 @@ class RuleGroupController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/autocomplete/getRuleGroupsAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
+     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getRuleGroupsAC
      */
     public function ruleGroups(AutocompleteRequest $request): JsonResponse
     {
         $data     = $request->getData();
-        $groups   = $this->repository->searchRuleGroup($data['query'], $data['limit']);
+        $groups   = $this->repository->searchRuleGroup($data['query'], $this->parameters->get('limit'));
         $response = [];
 
         /** @var RuleGroup $group */

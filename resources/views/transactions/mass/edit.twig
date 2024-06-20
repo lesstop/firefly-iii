@@ -36,7 +36,7 @@
                                     <td>
                                         {# LINK TO EDIT FORM #}
                                         <a href="{{ route('transactions.edit', journal.transaction_group_id) }}" class="btn btn-xs btn-default"><span
-                                                    class="fa fa-fw fa-pencil"></span></a>
+                                                class="fa fa-fw fa-pencil"></span></a>
                                         <input type="hidden" name="journals[]" value="{{ journal.transaction_journal_id }}"/>
                                     </td>
                                     <td>
@@ -74,7 +74,7 @@
                                                     ({{ formatAmountBySymbol(journal.foreign_amount*-1, journal.foreign_currency_symbol, journal.foreign_currency_decimal_places) }})
                                                 {% endif %}
                                             {% elseif journal.transaction_type_type == 'Transfer' %}
-                                                <span class="text-info">
+                                                <span class="text-info money-transfer">
                         {{ formatAmountBySymbol(journal.amount*-1, journal.currency_symbol, journal.currency_decimal_places, false) }}
                                                     {% if null != journal.foreign_amount %}
                                                         ({{ formatAmountBySymbol(journal.foreign_amount*-1, journal.foreign_currency_symbol, journal.foreign_currency_decimal_places, false) }})
@@ -92,7 +92,7 @@
                                     <td>
                                         {# DATE #}
                                         <input class="form-control input-sm" autocomplete="off"
-                                               name="date[{{ journal.transaction_journal_id }}]" type="date" value="{{ journal.date|slice(0,10) }}">
+                                               name="date[{{ journal.transaction_journal_id }}]" type="datetime-local" value="{{ journal.date }}">
                                     </td>
                                     <!-- {{ journal.transaction_type_type }} -->
                                     <!-- Source: {{ journal.source_account_name }} ({{ journal.source_account_id }}) -->

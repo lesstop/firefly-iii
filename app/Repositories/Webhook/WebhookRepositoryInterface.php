@@ -27,6 +27,7 @@ use FireflyIII\Models\Webhook;
 use FireflyIII\Models\WebhookAttempt;
 use FireflyIII\Models\WebhookMessage;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -36,66 +37,24 @@ interface WebhookRepositoryInterface
 {
     /**
      * Return all webhooks.
-     *
-     * @return Collection
      */
     public function all(): Collection;
 
-    /**
-     * @param  Webhook  $webhook
-     */
     public function destroy(Webhook $webhook): void;
 
-    /**
-     * @param  WebhookAttempt  $attempt
-     */
     public function destroyAttempt(WebhookAttempt $attempt): void;
 
-    /**
-     * @param  WebhookMessage  $message
-     */
     public function destroyMessage(WebhookMessage $message): void;
 
-    /**
-     * @param  WebhookMessage  $webhookMessage
-     *
-     * @return Collection
-     */
     public function getAttempts(WebhookMessage $webhookMessage): Collection;
 
-    /**
-     * @param  Webhook  $webhook
-     *
-     * @return Collection
-     */
     public function getMessages(Webhook $webhook): Collection;
 
-    /**
-     * @param  Webhook  $webhook
-     *
-     * @return Collection
-     */
     public function getReadyMessages(Webhook $webhook): Collection;
 
-    /**
-     * Set user.
-     *
-     * @param  User  $user
-     */
-    public function setUser(User $user): void;
+    public function setUser(null|Authenticatable|User $user): void;
 
-    /**
-     * @param  array  $data
-     *
-     * @return Webhook
-     */
     public function store(array $data): Webhook;
 
-    /**
-     * @param  Webhook  $webhook
-     * @param  array  $data
-     *
-     * @return Webhook
-     */
     public function update(Webhook $webhook, array $data): Webhook;
 }

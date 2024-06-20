@@ -24,41 +24,36 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Logging;
 
+use Monolog\LogRecord;
+
 /**
  * Class AuditProcessor
- *
- * @codeCoverageIgnore
  */
 class AuditProcessor
 {
-    /**
-     * @param  array  $record
-     *
-     * @return array
-     */
-    public function __invoke(array $record): array
+    public function __invoke(LogRecord $record): LogRecord
     {
         if (auth()->check()) {
-            $record['message'] = sprintf(
+            $message = sprintf(
                 'AUDIT: %s (%s (%s) -> %s:%s)',
-                $record['message'],
+                $record['message'], // @phpstan-ignore-line
                 app('request')->ip(),
                 auth()->user()->email,
                 request()->method(),
                 request()->url()
             );
 
-            return $record;
+            return new LogRecord($record->datetime, $record->channel, $record->level, $message, $record->context, $record->extra, $record->formatted);
         }
 
-        $record['message'] = sprintf(
+        $message = sprintf(
             'AUDIT: %s (%s -> %s:%s)',
-            $record['message'],
+            $record['message'], // @phpstan-ignore-line
             app('request')->ip(),
             request()->method(),
             request()->url()
         );
 
-        return $record;
+        return new LogRecord($record->datetime, $record->channel, $record->level, $message, $record->context, $record->extra, $record->formatted);
     }
 }

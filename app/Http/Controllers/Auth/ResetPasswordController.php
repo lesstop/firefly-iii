@@ -34,8 +34,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ResetPasswordController
@@ -43,8 +41,6 @@ use Psr\Container\NotFoundExceptionInterface;
  * This controller is responsible for handling password reset requests
  * and uses a simple trait to include this behavior. You're free to
  * explore this trait and override any methods you wish to tweak.
- *
- * @codeCoverageIgnore
  */
 class ResetPasswordController extends Controller
 {
@@ -65,10 +61,7 @@ class ResetPasswordController extends Controller
         parent::__construct();
         $this->middleware('guest');
 
-        $loginProvider = config('firefly.login_provider');
-        $authGuard     = config('firefly.authentication_guard');
-
-        if ('eloquent' !== $loginProvider || 'web' !== $authGuard) {
+        if ('web' !== config('firefly.authentication_guard')) {
             throw new FireflyException('Using external identity provider. Cannot continue.');
         }
     }
@@ -76,21 +69,19 @@ class ResetPasswordController extends Controller
     /**
      * Reset the given user's password.
      *
-     * @param  Request  $request
-     *
      * @return Factory|JsonResponse|RedirectResponse|View
-     * @throws ValidationException
      *
+     * @throws ValidationException
      */
     public function reset(Request $request)
     {
-        $loginProvider = config('firefly.login_provider');
-        if ('eloquent' !== $loginProvider) {
-            $message = sprintf('Cannot reset password when authenticating over "%s".', $loginProvider);
+        if ('web' !== config('firefly.authentication_guard')) {
+            $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
             return view('error', compact('message'));
         }
-        $rules = [
+
+        $rules    = [
             'token'    => 'required',
             'email'    => 'required|email',
             'password' => 'required|confirmed|min:16|secure_password',
@@ -100,10 +91,10 @@ class ResetPasswordController extends Controller
 
         // Here we will attempt to reset the user's password. If it is successful we
         // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
+        // database. Otherwise, we will parse the error and return the response.
         $response = $this->broker()->reset(
             $this->credentials($request),
-            function ($user, $password) {
+            function ($user, $password): void {
                 $this->resetPassword($user, $password);
             }
         );
@@ -111,7 +102,7 @@ class ResetPasswordController extends Controller
         // If the password was successfully reset, we will redirect the user back to
         // the application's home authenticated view. If there is an error we can
         // redirect them back to where they came from with their error message.
-        return $response === Password::PASSWORD_RESET
+        return Password::PASSWORD_RESET === $response
             ? $this->sendResetResponse($request, $response)
             : $this->sendResetFailedResponse($request, $response);
     }
@@ -121,19 +112,16 @@ class ResetPasswordController extends Controller
      *
      * If no token is present, display the link request form.
      *
-     * @param  Request  $request
-     * @param  null  $token
+     * @param null $token
      *
      * @return Factory|View
+     *
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function showResetForm(Request $request, $token = null)
     {
-        $loginProvider = config('firefly.login_provider');
-        if ('eloquent' !== $loginProvider) {
-            $message = sprintf('Cannot reset password when authenticating over "%s".', $loginProvider);
+        if ('web' !== config('firefly.authentication_guard')) {
+            $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
             return view('error', compact('message'));
         }

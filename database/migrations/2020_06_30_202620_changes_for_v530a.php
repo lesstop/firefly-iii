@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -35,31 +36,43 @@ class ChangesForV530a extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
-        Schema::table(
-            'bills',
-            static function (Blueprint $table) {
-                $table->dropColumn('order');
+        if (Schema::hasColumn('bills', 'order')) {
+            try {
+                Schema::table(
+                    'bills',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn('order');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        Schema::table(
-            'bills',
-            static function (Blueprint $table) {
-                $table->integer('order', false, true)->default(0);
+        if (!Schema::hasColumn('bills', 'order')) {
+            try {
+                Schema::table(
+                    'bills',
+                    static function (Blueprint $table): void {
+                        $table->integer('order', false, true)->default(0);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

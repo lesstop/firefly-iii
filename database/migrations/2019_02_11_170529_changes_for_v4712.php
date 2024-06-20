@@ -22,6 +22,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -34,23 +35,17 @@ class ChangesForV4712 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down(): void
-    {
-        //
-    }
+    public function down(): void {}
 
     /**
      * Run the migrations.
-     * @SuppressWarnings(PHPMD.ShortMethodName)
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        /**
+        /*
          * In 4.7.11, I changed the date field to a "datetimetz" field. This wreaks havoc
          * because apparently MySQL is not actually capable of handling multiple time zones,
          * only having a server wide time zone setting. Actual database schemes like Postgres
@@ -58,11 +53,16 @@ class ChangesForV4712 extends Migration
          * datetime (without a time zone) for all database engines because MySQL refuses to play
          * nice.
          */
-        Schema::table(
-            'transaction_journals',
-            static function (Blueprint $table) {
-                $table->dateTime('date')->change();
-            }
-        );
+        try {
+            Schema::table(
+                'transaction_journals',
+                static function (Blueprint $table): void {
+                    $table->dateTime('date')->change();
+                }
+            );
+        } catch (QueryException $e) {
+            app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+            app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
+        }
     }
 }

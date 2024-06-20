@@ -57,16 +57,12 @@ class CategoryController extends Controller
 
     /**
      * Documentation for this endpoint is at:
-     * https://api-docs.firefly-iii.org/#/autocomplete/getCategoriesAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getCategoriesAC
      */
     public function categories(AutocompleteRequest $request): JsonResponse
     {
         $data     = $request->getData();
-        $result   = $this->repository->searchCategory($data['query'], $data['limit']);
+        $result   = $this->repository->searchCategory($data['query'], $this->parameters->get('limit'));
         $filtered = $result->map(
             static function (Category $item) {
                 return [

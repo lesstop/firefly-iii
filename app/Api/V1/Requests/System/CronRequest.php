@@ -24,14 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\System;
 
-use Carbon\Carbon;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Class CronRequest
- *
- * @codeCoverageIgnore
  */
 class CronRequest extends FormRequest
 {
@@ -39,8 +36,6 @@ class CronRequest extends FormRequest
 
     /**
      * Verify the request.
-     *
-     * @return bool
      */
     public function authorize(): bool
     {
@@ -49,14 +44,12 @@ class CronRequest extends FormRequest
 
     /**
      * Get all data from the request.
-     *
-     * @return array
      */
     public function getAll(): array
     {
         $data = [
             'force' => false,
-            'date'  => Carbon::now(),
+            'date'  => today(config('app.timezone')),
         ];
         if ($this->has('force')) {
             $data['force'] = $this->boolean('force');
@@ -70,8 +63,6 @@ class CronRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {

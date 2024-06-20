@@ -24,27 +24,30 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Transaction;
 
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Rules\BelongsUser;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsDateOrTime;
+use FireflyIII\Rules\IsValidPositiveAmount;
+use FireflyIII\Rules\IsValidZeroOrMoreAmount;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\GroupValidation;
 use FireflyIII\Validation\TransactionValidation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Validator;
-use Log;
 
 /**
  * Class UpdateRequest
  */
 class UpdateRequest extends FormRequest
 {
-    use TransactionValidation;
-    use GroupValidation;
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
+    use GroupValidation;
+    use TransactionValidation;
 
     private array $arrayFields;
     private array $booleanFields;
@@ -57,79 +60,20 @@ class UpdateRequest extends FormRequest
     /**
      * Get all data. Is pretty complex because of all the ??-statements.
      *
-     * @return array
+     * @throws FireflyException
      */
     public function getAll(): array
     {
-        $this->integerFields = [
-            'order',
-            'currency_id',
-            'foreign_currency_id',
-            'transaction_journal_id',
-            'source_id',
-            'destination_id',
-            'budget_id',
-            'category_id',
-            'bill_id',
-            'recurrence_id',
-        ];
-
-        $this->dateFields = [
-            'date',
-            'interest_date',
-            'book_date',
-            'process_date',
-            'due_date',
-            'payment_date',
-            'invoice_date',
-        ];
-
-        $this->textareaFields = [
-            'notes',
-        ];
-
-        $this->floatFields = [ // not really floats, for validation.
-                               'amount',
-                               'foreign_amount',
-        ];
-
-        $this->stringFields  = [
-            'type',
-            'currency_code',
-            'foreign_currency_code',
-            'description',
-            'source_name',
-            'source_iban',
-            'source_number',
-            'source_bic',
-            'destination_name',
-            'destination_iban',
-            'destination_number',
-            'destination_bic',
-            'budget_name',
-            'category_name',
-            'bill_name',
-            'internal_reference',
-            'external_id',
-            'bunq_payment_id',
-            'sepa_cc',
-            'sepa_ct_op',
-            'sepa_ct_id',
-            'sepa_db',
-            'sepa_country',
-            'sepa_ep',
-            'sepa_ci',
-            'sepa_batch_id',
-            'external_url',
-        ];
-        $this->booleanFields = [
-            'reconciled',
-        ];
-
-        $this->arrayFields = [
-            'tags',
-        ];
-        $data              = [];
+        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        $this->integerFields  = ['order', 'currency_id', 'foreign_currency_id', 'transaction_journal_id', 'source_id', 'destination_id', 'budget_id', 'category_id', 'bill_id', 'recurrence_id'];
+        $this->dateFields     = ['date', 'interest_date', 'book_date', 'process_date', 'due_date', 'payment_date', 'invoice_date'];
+        $this->textareaFields = ['notes'];
+        // not really floats, for validation.
+        $this->floatFields    = ['amount', 'foreign_amount'];
+        $this->stringFields   = ['type', 'currency_code', 'foreign_currency_code', 'description', 'source_name', 'source_iban', 'source_number', 'source_bic', 'destination_name', 'destination_iban', 'destination_number', 'destination_bic', 'budget_name', 'category_name', 'bill_name', 'internal_reference', 'external_id', 'bunq_payment_id', 'sepa_cc', 'sepa_ct_op', 'sepa_ct_id', 'sepa_db', 'sepa_country', 'sepa_ep', 'sepa_ci', 'sepa_batch_id', 'external_url'];
+        $this->booleanFields  = ['reconciled'];
+        $this->arrayFields    = ['tags'];
+        $data                 = [];
         if ($this->has('transactions')) {
             $data['transactions'] = $this->getTransactionData();
         }
@@ -149,19 +93,25 @@ class UpdateRequest extends FormRequest
     /**
      * Get transaction data.
      *
-     * @return array
+     * @throws FireflyException
      */
     private function getTransactionData(): array
     {
-        Log::debug('Now in getTransactionData()');
-        $return = [];
+        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        $return       = [];
 
-        if (!is_countable($this->get('transactions'))) {
+        /** @var null|array $transactions */
+        $transactions = $this->get('transactions');
+
+        if (!is_countable($transactions)) {
             return $return;
         }
 
-        /** @var array $transaction */
-        foreach ($this->get('transactions') as $transaction) {
+        /** @var null|array $transaction */
+        foreach ($transactions as $transaction) {
+            if (!is_array($transaction)) {
+                throw new FireflyException('Invalid data submitted: transaction is not array.');
+            }
             // default response is to update nothing in the transaction:
             $current  = [];
             $current  = $this->getIntegerData($current, $transaction);
@@ -180,10 +130,8 @@ class UpdateRequest extends FormRequest
     /**
      * For each field, add it to the array if a reference is present in the request:
      *
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getIntegerData(array $current, array $transaction): array
     {
@@ -197,31 +145,12 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getStringData(array $current, array $transaction): array
     {
         foreach ($this->stringFields as $fieldName) {
-            if (array_key_exists($fieldName, $transaction)) {
-                $current[$fieldName] = $this->clearString((string)$transaction[$fieldName], false);
-            }
-        }
-
-        return $current;
-    }
-
-    /**
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
-     */
-    private function getNlStringData(array $current, array $transaction): array
-    {
-        foreach ($this->textareaFields as $fieldName) {
             if (array_key_exists($fieldName, $transaction)) {
                 $current[$fieldName] = $this->clearString((string)$transaction[$fieldName]);
             }
@@ -231,17 +160,30 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
+     */
+    private function getNlStringData(array $current, array $transaction): array
+    {
+        foreach ($this->textareaFields as $fieldName) {
+            if (array_key_exists($fieldName, $transaction)) {
+                $current[$fieldName] = $this->clearStringKeepNewlines((string)$transaction[$fieldName]); // keep newlines
+            }
+        }
+
+        return $current;
+    }
+
+    /**
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getDateData(array $current, array $transaction): array
     {
         foreach ($this->dateFields as $fieldName) {
-            Log::debug(sprintf('Now at date field %s', $fieldName));
+            app('log')->debug(sprintf('Now at date field %s', $fieldName));
             if (array_key_exists($fieldName, $transaction)) {
-                Log::debug(sprintf('New value: "%s"', (string)$transaction[$fieldName]));
+                app('log')->debug(sprintf('New value: "%s"', (string)$transaction[$fieldName]));
                 $current[$fieldName] = $this->dateFromValue((string)$transaction[$fieldName]);
             }
         }
@@ -250,10 +192,8 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getBooleanData(array $current, array $transaction): array
     {
@@ -267,10 +207,8 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * @param  array  $current
-     * @param  array  $transaction
-     *
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getArrayData(array $current, array $transaction): array
     {
@@ -284,9 +222,8 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * @param  array  $current
-     * @param  array  $transaction
-     * @return array
+     * @param array<string, string> $current
+     * @param array<string, mixed>  $transaction
      */
     private function getFloatData(array $current, array $transaction): array
     {
@@ -294,7 +231,7 @@ class UpdateRequest extends FormRequest
             if (array_key_exists($fieldName, $transaction)) {
                 $value = $transaction[$fieldName];
                 if (is_float($value)) {
-                    $current[$fieldName] = sprintf('%.24f', $value);
+                    $current[$fieldName] = sprintf('%.12f', $value);
                 }
                 if (!is_float($value)) {
                     $current[$fieldName] = (string)$value;
@@ -307,14 +244,15 @@ class UpdateRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
+        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        $validProtocols = config('firefly.valid_url_protocols');
+
         return [
             // basic fields for group:
-            'group_title'                           => 'between:1,1000',
+            'group_title'                           => 'min:1|max:1000|nullable',
             'apply_rules'                           => [new IsBoolean()],
 
             // transaction rules (in array for splits):
@@ -325,57 +263,57 @@ class UpdateRequest extends FormRequest
             // group id:
             'transactions.*.transaction_journal_id' => ['nullable', 'numeric', new BelongsUser()],
 
-
             // currency info
-            'transactions.*.currency_id'            => 'numeric|exists:transaction_currencies,id',
-            'transactions.*.currency_code'          => 'min:3|max:3|exists:transaction_currencies,code',
+            'transactions.*.currency_id'            => 'numeric|exists:transaction_currencies,id|nullable',
+            'transactions.*.currency_code'          => 'min:3|max:51|exists:transaction_currencies,code|nullable',
             'transactions.*.foreign_currency_id'    => 'nullable|numeric|exists:transaction_currencies,id',
-            'transactions.*.foreign_currency_code'  => 'nullable|min:3|max:3|exists:transaction_currencies,code',
+            'transactions.*.foreign_currency_code'  => 'nullable|min:3|max:51|exists:transaction_currencies,code',
 
             // amount
-            'transactions.*.amount'                 => 'numeric|gt:0|max:100000000000',
-            'transactions.*.foreign_amount'         => 'nullable|numeric|gte:0',
+            'transactions.*.amount'                 => [new IsValidPositiveAmount()],
+            'transactions.*.foreign_amount'         => ['nullable', new IsValidZeroOrMoreAmount()],
 
             // description
-            'transactions.*.description'            => 'nullable|between:1,1000',
+            'transactions.*.description'            => 'nullable|min:1|max:1000',
 
             // source of transaction
             'transactions.*.source_id'              => ['numeric', 'nullable', new BelongsUser()],
-            'transactions.*.source_name'            => 'between:1,255|nullable',
+            'transactions.*.source_name'            => 'min:1|max:255|nullable',
 
             // destination of transaction
             'transactions.*.destination_id'         => ['numeric', 'nullable', new BelongsUser()],
-            'transactions.*.destination_name'       => 'between:1,255|nullable',
+            'transactions.*.destination_name'       => 'min:1|max:255|nullable',
 
             // budget, category, bill and piggy
-            'transactions.*.budget_id'              => ['mustExist:budgets,id', new BelongsUser()],
-            'transactions.*.budget_name'            => ['between:1,255', 'nullable', new BelongsUser()],
-            'transactions.*.category_id'            => ['mustExist:categories,id', new BelongsUser()],
-            'transactions.*.category_name'          => 'between:1,255|nullable',
+            'transactions.*.budget_id'              => ['mustExist:budgets,id', new BelongsUser(), 'nullable'],
+            'transactions.*.budget_name'            => ['min:1', 'max:255', 'nullable', new BelongsUser()],
+            'transactions.*.category_id'            => ['mustExist:categories,id', new BelongsUser(), 'nullable'],
+            'transactions.*.category_name'          => 'min:1|max:255|nullable',
             'transactions.*.bill_id'                => ['numeric', 'nullable', 'mustExist:bills,id', new BelongsUser()],
-            'transactions.*.bill_name'              => ['between:1,255', 'nullable', new BelongsUser()],
+            'transactions.*.bill_name'              => ['min:1', 'max:255', 'nullable', new BelongsUser()],
 
             // other interesting fields
             'transactions.*.reconciled'             => [new IsBoolean()],
-            'transactions.*.notes'                  => 'min:1,max:50000|nullable',
-            'transactions.*.tags'                   => 'between:0,255',
+            'transactions.*.notes'                  => 'min:1|max:32768|nullable',
+            'transactions.*.tags'                   => 'min:0|max:255|nullable',
+            'transactions.*.tags.*'                 => 'min:0|max:255',
 
             // meta info fields
-            'transactions.*.internal_reference'     => 'min:1,max:255|nullable',
-            'transactions.*.external_id'            => 'min:1,max:255|nullable',
-            'transactions.*.recurrence_id'          => 'min:1,max:255|nullable',
-            'transactions.*.bunq_payment_id'        => 'min:1,max:255|nullable',
-            'transactions.*.external_url'           => 'min:1,max:255|nullable|url',
+            'transactions.*.internal_reference'     => 'min:1|max:255|nullable',
+            'transactions.*.external_id'            => 'min:1|max:255|nullable',
+            'transactions.*.recurrence_id'          => 'min:1|max:255|nullable',
+            'transactions.*.bunq_payment_id'        => 'min:1|max:255|nullable',
+            'transactions.*.external_url'           => sprintf('min:1|max:255|nullable|url:%s', $validProtocols),
 
             // SEPA fields:
-            'transactions.*.sepa_cc'                => 'min:1,max:255|nullable',
-            'transactions.*.sepa_ct_op'             => 'min:1,max:255|nullable',
-            'transactions.*.sepa_ct_id'             => 'min:1,max:255|nullable',
-            'transactions.*.sepa_db'                => 'min:1,max:255|nullable',
-            'transactions.*.sepa_country'           => 'min:1,max:255|nullable',
-            'transactions.*.sepa_ep'                => 'min:1,max:255|nullable',
-            'transactions.*.sepa_ci'                => 'min:1,max:255|nullable',
-            'transactions.*.sepa_batch_id'          => 'min:1,max:255|nullable',
+            'transactions.*.sepa_cc'                => 'min:1|max:255|nullable',
+            'transactions.*.sepa_ct_op'             => 'min:1|max:255|nullable',
+            'transactions.*.sepa_ct_id'             => 'min:1|max:255|nullable',
+            'transactions.*.sepa_db'                => 'min:1|max:255|nullable',
+            'transactions.*.sepa_country'           => 'min:1|max:255|nullable',
+            'transactions.*.sepa_ep'                => 'min:1|max:255|nullable',
+            'transactions.*.sepa_ci'                => 'min:1|max:255|nullable',
+            'transactions.*.sepa_batch_id'          => 'min:1|max:255|nullable',
 
             // dates
             'transactions.*.interest_date'          => 'date|nullable',
@@ -389,33 +327,39 @@ class UpdateRequest extends FormRequest
 
     /**
      * Configure the validator instance.
-     *
-     * @param  Validator  $validator
-     *
-     * @return void
      */
     public function withValidator(Validator $validator): void
     {
+        app('log')->debug('Now in withValidator');
+
         /** @var TransactionGroup $transactionGroup */
         $transactionGroup = $this->route()->parameter('transactionGroup');
         $validator->after(
-            function (Validator $validator) use ($transactionGroup) {
+            function (Validator $validator) use ($transactionGroup): void {
                 // if more than one, verify that there are journal ID's present.
                 $this->validateJournalIds($validator, $transactionGroup);
 
                 // all transaction types must be equal:
                 $this->validateTransactionTypesForUpdate($validator);
 
+                // user wants to update a reconciled transaction.
+                // source, destination, amount + foreign_amount cannot be changed
+                // and must be omitted from the request.
+                $this->preventUpdateReconciled($validator, $transactionGroup);
+
                 // validate source/destination is equal, depending on the transaction journal type.
                 $this->validateEqualAccountsForUpdate($validator, $transactionGroup);
 
-                // a catch when users submit splits with no source or destination info at all.
-                $this->preventNoAccountInfo($validator, );
+                // see method:
+                // $this->preventNoAccountInfo($validator, );
 
                 // validate that the currency fits the source and/or destination account.
                 // validate all account info
                 $this->validateAccountInformationUpdate($validator, $transactionGroup);
             }
         );
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 }

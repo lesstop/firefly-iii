@@ -26,6 +26,7 @@ namespace FireflyIII\Api\V2\Controllers\System;
 
 use FireflyIII\Api\V2\Controllers\Controller;
 
-class DebugController extends Controller
-{
-}
+/**
+ * Class DebugController
+ */
+class DebugController extends Controller {}

@@ -32,10 +32,8 @@ class DropTeleTable extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
         Schema::dropIfExists('telemetry');
     }
@@ -43,9 +41,9 @@ class DropTeleTable extends Migration
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
-    public function up()
+    public function up(): void
     {
         Schema::dropIfExists('telemetry');
     }

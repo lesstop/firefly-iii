@@ -32,73 +32,65 @@ use Symfony\Component\HttpFoundation\ParameterBag;
  */
 class BudgetTransformer extends AbstractTransformer
 {
-    //private OperationsRepositoryInterface $opsRepository;
-    //private BudgetRepositoryInterface     $repository;
+    // private OperationsRepositoryInterface $opsRepository;
+    // private BudgetRepositoryInterface     $repository;
 
     /**
      * BudgetTransformer constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
-        //$this->opsRepository = app(OperationsRepositoryInterface::class);
-        //$this->repository    = app(BudgetRepositoryInterface::class);
+        // $this->opsRepository = app(OperationsRepositoryInterface::class);
+        // $this->repository    = app(BudgetRepositoryInterface::class);
         $this->parameters = new ParameterBag();
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function collectMetaData(Collection $objects): void
+    public function collectMetaData(Collection $objects): Collection
     {
         // TODO: Implement collectMetaData() method.
+        return $objects;
     }
 
     /**
      * Transform a budget.
-     *
-     * @param  Budget  $budget
-     *
-     * @return array
      */
     public function transform(Budget $budget): array
     {
-        //$this->opsRepository->setUser($budget->user);
-        $start = $this->parameters->get('start');
-        $end   = $this->parameters->get('end');
-        //$autoBudget = $this->repository->getAutoBudget($budget);
-//        $spent      = [];
-//        if (null !== $start && null !== $end) {
-//            $spent = $this->beautify($this->opsRepository->sumExpenses($start, $end, null, new Collection([$budget])));
-//        }
+        // $this->opsRepository->setUser($budget->user);
+        // $start = $this->parameters->get('start');
+        // $end   = $this->parameters->get('end');
+        // $autoBudget = $this->repository->getAutoBudget($budget);
+        //        $spent      = [];
+        //        if (null !== $start && null !== $end) {
+        //            $spent = $this->beautify($this->opsRepository->sumExpenses($start, $end, null, new Collection([$budget])));
+        //        }
 
-//        $abCurrencyId   = null;
-//        $abCurrencyCode = null;
-//        $abType         = null;
-//        $abAmount       = null;
-//        $abPeriod       = null;
-//        $notes          = $this->repository->getNoteText($budget);
-//
-//        $types = [
-//            AutoBudget::AUTO_BUDGET_RESET    => 'reset',
-//            AutoBudget::AUTO_BUDGET_ROLLOVER => 'rollover',
-//        ];
-//
-//        if (null !== $autoBudget) {
-//            $abCurrencyId   = (string) $autoBudget->transactionCurrency->id;
-//            $abCurrencyCode = $autoBudget->transactionCurrency->code;
-//            $abType         = $types[$autoBudget->auto_budget_type];
-//            $abAmount       = number_format((float) $autoBudget->amount, $autoBudget->transactionCurrency->decimal_places, '.', '');
-//            $abPeriod       = $autoBudget->period;
-//        }
+        //        $abCurrencyId   = null;
+        //        $abCurrencyCode = null;
+        //        $abType         = null;
+        //        $abAmount       = null;
+        //        $abPeriod       = null;
+        //        $notes          = $this->repository->getNoteText($budget);
+        //
+        //        $types = [
+        //            AutoBudget::AUTO_BUDGET_RESET    => 'reset',
+        //            AutoBudget::AUTO_BUDGET_ROLLOVER => 'rollover',
+        //        ];
+        //
+        //        if (null !== $autoBudget) {
+        //            $abCurrencyId   = (string) $autoBudget->transactionCurrency->id;
+        //            $abCurrencyCode = $autoBudget->transactionCurrency->code;
+        //            $abType         = $types[$autoBudget->auto_budget_type];
+        //            $abAmount       = number_format((float) $autoBudget->amount, $autoBudget->transactionCurrency->decimal_places, '.', '');
+        //            $abPeriod       = $autoBudget->period;
+        //        }
 
         return [
             'id'         => (string)$budget->id,
             'created_at' => $budget->created_at->toAtomString(),
             'updated_at' => $budget->updated_at->toAtomString(),
-            'active'     => $budget->active,
             'name'       => $budget->name,
+            'active'     => $budget->active,
             'order'      => $budget->order,
             //            'notes'                     => $notes,
             //            'auto_budget_type'          => $abType,
@@ -114,21 +106,5 @@ class BudgetTransformer extends AbstractTransformer
                 ],
             ],
         ];
-    }
-
-    /**
-     * @param  array  $array
-     *
-     * @return array
-     */
-    private function beautify(array $array): array
-    {
-        $return = [];
-        foreach ($array as $data) {
-            $data['sum'] = number_format((float)$data['sum'], (int)$data['currency_decimal_places'], '.', '');
-            $return[]    = $data;
-        }
-
-        return $return;
     }
 }

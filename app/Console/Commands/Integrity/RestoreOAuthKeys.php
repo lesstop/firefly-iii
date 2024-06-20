@@ -24,32 +24,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Integrity;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Support\System\OAuthKeys;
 use Illuminate\Console\Command;
-use Log;
 
 /**
  * Class RestoreOAuthKeys
  */
 class RestoreOAuthKeys extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Will restore the OAuth keys generated for the system.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:restore-oauth-keys';
+    protected $signature   = 'firefly-iii:restore-oauth-keys';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
@@ -58,80 +48,57 @@ class RestoreOAuthKeys extends Command
         return 0;
     }
 
-    /**
-     *
-     */
     private function restoreOAuthKeys(): void
     {
-        Log::debug('Going to restoreOAuthKeys()');
         if (!$this->keysInDatabase() && !$this->keysOnDrive()) {
-            Log::debug('Keys are not in DB and keys are not on the drive.');
             $this->generateKeys();
             $this->storeKeysInDB();
-            $this->line('Generated and stored new keys.');
+            $this->friendlyInfo('Generated and stored new keys.');
 
             return;
         }
         if ($this->keysInDatabase() && !$this->keysOnDrive()) {
-            Log::debug('Keys are in DB and keys are not on the drive. Restore.');
             $result = $this->restoreKeysFromDB();
             if (true === $result) {
-                $this->line('Restored OAuth keys from database.');
+                $this->friendlyInfo('Restored OAuth keys from database.');
 
                 return;
             }
-            app('log')->warning('Could not restore keys. Will create new ones.');
             $this->generateKeys();
             $this->storeKeysInDB();
-            $this->line('Generated and stored new keys.');
+            $this->friendlyInfo('Generated and stored new keys.');
 
             return;
         }
         if (!$this->keysInDatabase() && $this->keysOnDrive()) {
-            Log::debug('Keys are not in DB and keys are on the drive. Save in DB.');
             $this->storeKeysInDB();
-            $this->line('Stored OAuth keys in database.');
+            $this->friendlyInfo('Stored OAuth keys in database.');
 
             return;
         }
-        $this->line('OAuth keys are OK');
+        $this->friendlyPositive('OAuth keys are OK');
     }
 
-    /**
-     * @return bool
-     */
     private function keysInDatabase(): bool
     {
         return OAuthKeys::keysInDatabase();
     }
 
-    /**
-     * @return bool
-     */
     private function keysOnDrive(): bool
     {
         return OAuthKeys::hasKeyFiles();
     }
 
-    /**
-     *
-     */
     private function generateKeys(): void
     {
         OAuthKeys::generateKeys();
     }
 
-    /**
-     *
-     */
     private function storeKeysInDB(): void
     {
         OAuthKeys::storeKeysInDB();
     }
 
-    /**
-     *
-     */
     private function restoreKeysFromDB(): bool
     {
         return OAuthKeys::restoreKeysFromDB();

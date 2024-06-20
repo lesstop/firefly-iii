@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\LinkType;
 use Illuminate\Console\Command;
 
@@ -31,27 +32,17 @@ use Illuminate\Console\Command;
  */
 class CreateLinkTypes extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Creates all link types.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:create-link-types';
+
+    protected $signature   = 'firefly-iii:create-link-types';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
-        $start = microtime(true);
         $count = 0;
         $set   = [
             'Related'       => ['relates to', 'relates to'],
@@ -60,24 +51,23 @@ class CreateLinkTypes extends Command
             'Reimbursement' => ['(partially) reimburses', 'is (partially) reimbursed by'],
         ];
         foreach ($set as $name => $values) {
-            $link = LinkType::where('name', $name)
-                            ->first();
+            $link           = LinkType::where('name', $name)
+                ->first()
+            ;
             if (null === $link) {
                 $link          = new LinkType();
                 $link->name    = $name;
                 $link->inward  = $values[1];
                 $link->outward = $values[0];
                 ++$count;
-                $this->line(sprintf('Created missing link type "%s"', $name));
+                $this->friendlyInfo(sprintf('Created missing link type "%s"', $name));
             }
             $link->editable = false;
             $link->save();
         }
         if (0 === $count) {
-            $this->info('All link types OK!');
+            $this->friendlyPositive('All link types are OK');
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Verified link types in %s seconds', $end));
 
         return 0;
     }

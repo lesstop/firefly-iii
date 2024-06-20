@@ -23,60 +23,40 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
-use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\BudgetLimit;
 use Illuminate\Console\Command;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
+/**
+ * Class AppendBudgetLimitPeriods
+ */
 class AppendBudgetLimitPeriods extends Command
 {
-    public const CONFIG_NAME = '550_budget_limit_periods';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Append budget limits with their (estimated) timeframe.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:budget-limit-periods {--F|force : Force the execution of this command.}';
+    use ShowsFriendlyMessages;
+
+    public const string CONFIG_NAME = '550_budget_limit_periods';
+
+    protected $description          = 'Append budget limits with their (estimated) timeframe.';
+
+    protected $signature            = 'firefly-iii:budget-limit-periods {--F|force : Force the execution of this command.}';
 
     /**
      * Execute the console command.
-     *
-     * @return int
-     * @throws FireflyException
      */
     public function handle(): int
     {
-        $start = microtime(true);
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
 
         $this->theresNoLimit();
-
         $this->markAsExecuted();
-
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Fixed budget limits in %s seconds.', $end));
 
         return 0;
     }
 
-    /**
-     * @return bool
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function isExecuted(): bool
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
@@ -84,24 +64,19 @@ class AppendBudgetLimitPeriods extends Command
         return (bool)$configVar->data;
     }
 
-    /**
-     *
-     */
     private function theresNoLimit(): void
     {
         $limits = BudgetLimit::whereNull('period')->get();
+
         /** @var BudgetLimit $limit */
         foreach ($limits as $limit) {
             $this->fixLimit($limit);
         }
     }
 
-    /**
-     * @param  BudgetLimit  $limit
-     */
-    private function fixLimit(BudgetLimit $limit)
+    private function fixLimit(BudgetLimit $limit): void
     {
-        $period = $this->getLimitPeriod($limit);
+        $period        = $this->getLimitPeriod($limit);
 
         if (null === $period) {
             $message = sprintf(
@@ -110,7 +85,7 @@ class AppendBudgetLimitPeriods extends Command
                 $limit->start_date->format('Y-m-d'),
                 $limit->end_date->format('Y-m-d')
             );
-            $this->warn($message);
+            $this->friendlyWarning($message);
             app('log')->warning($message);
 
             return;
@@ -118,21 +93,16 @@ class AppendBudgetLimitPeriods extends Command
         $limit->period = $period;
         $limit->save();
 
-        $msg = sprintf(
+        $msg           = sprintf(
             'Budget limit #%d (%s - %s) period is "%s".',
             $limit->id,
             $limit->start_date->format('Y-m-d'),
             $limit->end_date->format('Y-m-d'),
             $period
         );
-        Log::debug($msg);
+        app('log')->debug($msg);
     }
 
-    /**
-     * @param  BudgetLimit  $limit
-     *
-     * @return string|null
-     */
     private function getLimitPeriod(BudgetLimit $limit): ?string
     {
         // is daily
@@ -140,7 +110,7 @@ class AppendBudgetLimitPeriods extends Command
             return 'daily';
         }
         // is weekly
-        if ('1' === $limit->start_date->format('N') && '7' === $limit->end_date->format('N') && 6 === $limit->end_date->diffInDays($limit->start_date)) {
+        if ('1' === $limit->start_date->format('N') && '7' === $limit->end_date->format('N') && 6 === (int)$limit->end_date->diffInDays($limit->start_date, true)) {
             return 'weekly';
         }
 
@@ -159,7 +129,7 @@ class AppendBudgetLimitPeriods extends Command
         if (
             in_array($limit->start_date->format('j-n'), $start, true) // start of quarter
             && in_array($limit->end_date->format('j-n'), $end, true) // end of quarter
-            && 2 === $limit->start_date->diffInMonths($limit->end_date)
+            && 2 === (int)$limit->start_date->diffInMonths($limit->end_date, true)
         ) {
             return 'quarterly';
         }
@@ -169,7 +139,7 @@ class AppendBudgetLimitPeriods extends Command
         if (
             in_array($limit->start_date->format('j-n'), $start, true) // start of quarter
             && in_array($limit->end_date->format('j-n'), $end, true) // end of quarter
-            && 5 === $limit->start_date->diffInMonths($limit->end_date)
+            && 5 === (int)$limit->start_date->diffInMonths($limit->end_date, true)
         ) {
             return 'half_year';
         }
@@ -181,9 +151,6 @@ class AppendBudgetLimitPeriods extends Command
         return null;
     }
 
-    /**
-     *
-     */
     private function markAsExecuted(): void
     {
         app('fireflyconfig')->set(self::CONFIG_NAME, true);

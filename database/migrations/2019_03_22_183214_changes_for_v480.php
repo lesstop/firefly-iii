@@ -22,6 +22,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 
 /**
@@ -33,69 +34,146 @@ class ChangesForV480 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
-        Schema::table(
-            'transaction_journals',
-            static function (Blueprint $table) {
-                // drop transaction_group_id + foreign key.
-                // cannot drop foreign keys in SQLite:
-                if ('sqlite' !== config('database.default')) {
-                    $table->dropForeign('transaction_journals_transaction_group_id_foreign');
-                }
-                $table->dropColumn('transaction_group_id');
-            }
-        );
-        Schema::table(
-            'rule_groups',
-            static function (Blueprint $table) {
-                $table->dropColumn('stop_processing');
-            }
-        );
+        // remove group ID
+        if (Schema::hasColumn('transaction_journals', 'transaction_group_id')) {
+            try {
+                Schema::table(
+                    'transaction_journals',
+                    static function (Blueprint $table): void {
+                        // drop transaction_group_id + foreign key.
+                        // cannot drop foreign keys in SQLite:
+                        if ('sqlite' !== config('database.default')) {
+                            try {
+                                $table->dropForeign('transaction_journals_transaction_group_id_foreign');
+                            } catch (QueryException $e) {
+                                app('log')->error(sprintf('Could not drop foreign ID: %s', $e->getMessage()));
+                                app('log')->error('If the foreign ID does not exist (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
+                            }
+                        }
 
-        Schema::table(
-            'users',
-            static function (Blueprint $table) {
-                $table->dropColumn('mfa_secret');
+                        try {
+                            $table->dropColumn('transaction_group_id');
+                        } catch (QueryException $e) {
+                            app('log')->error(sprintf('Could not drop column: %s', $e->getMessage()));
+                            app('log')->error('If the column does not exist, this is not an problem. Otherwise, please open a GitHub discussion.');
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
+
+        // remove 'stop processing' column
+        if (Schema::hasColumn('rule_groups', 'stop_processing')) {
+            try {
+                Schema::table(
+                    'rule_groups',
+                    static function (Blueprint $table): void {
+                        try {
+                            $table->dropColumn('stop_processing');
+                        } catch (QueryException $e) {
+                            app('log')->error(sprintf('Could not drop column: %s', $e->getMessage()));
+                            app('log')->error('If the column does not exist, this is not an problem. Otherwise, please open a GitHub discussion.');
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
+            }
+        }
+
+        // remove 'mfa_secret' column
+        if (Schema::hasColumn('users', 'mfa_secret')) {
+            try {
+                Schema::table(
+                    'users',
+                    static function (Blueprint $table): void {
+                        try {
+                            $table->dropColumn('mfa_secret');
+                        } catch (QueryException $e) {
+                            app('log')->error(sprintf('Could not drop column: %s', $e->getMessage()));
+                            app('log')->error('If the column does not exist, this is not an problem. Otherwise, please open a GitHub discussion.');
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
+            }
+        }
     }
 
     /**
      * Run the migrations.
-     * @SuppressWarnings(PHPMD.ShortMethodName)
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        Schema::table(
-            'transaction_journals',
-            static function (Blueprint $table) {
-                $table->integer('transaction_currency_id', false, true)->nullable()->change();
+        // add currency_id
+        if (!Schema::hasColumn('transaction_journals', 'transaction_group_id')) {
+            try {
+                Schema::table(
+                    'transaction_journals',
+                    static function (Blueprint $table): void {
+                        $table->integer('transaction_currency_id', false, true)->nullable()->change();
 
-                // add column "group_id" after "transaction_type_id"
-                $table->integer('transaction_group_id', false, true)
-                      ->nullable()->default(null)->after('transaction_type_id');
+                        // add column "group_id" after "transaction_type_id"
+                        $table->integer('transaction_group_id', false, true)
+                            ->nullable()->default(null)->after('transaction_type_id')
+                        ;
 
-                // add foreign key for "transaction_group_id"
-                $table->foreign('transaction_group_id')->references('id')->on('transaction_groups')->onDelete('cascade');
+                        // add foreign key for "transaction_group_id"
+                        try {
+                            $table->foreign('transaction_group_id')->references('id')->on('transaction_groups')->onDelete('cascade');
+                        } catch (QueryException $e) {
+                            app('log')->error(sprintf('Could not create foreign index: %s', $e->getMessage()));
+                            app('log')->error(
+                                'If this table exists already (see the error message), this is not a problem. Other errors? Please open a discussion on GitHub.'
+                            );
+                        }
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
-        Schema::table(
-            'rule_groups',
-            static function (Blueprint $table) {
-                $table->boolean('stop_processing')->default(false);
+        }
+
+        // add 'stop processing' column
+        if (!Schema::hasColumn('rule_groups', 'stop_processing')) {
+            try {
+                Schema::table(
+                    'rule_groups',
+                    static function (Blueprint $table): void {
+                        $table->boolean('stop_processing')->default(false);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
-        Schema::table(
-            'users',
-            static function (Blueprint $table) {
-                $table->string('mfa_secret', 50)->nullable();
+        }
+
+        // add 'mfa_secret' column
+        if (!Schema::hasColumn('users', 'mfa_secret')) {
+            try {
+                Schema::table(
+                    'users',
+                    static function (Blueprint $table): void {
+                        $table->string('mfa_secret', 50)->nullable();
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

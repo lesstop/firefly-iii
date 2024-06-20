@@ -25,7 +25,6 @@ namespace Database\Seeders;
 
 use FireflyIII\Models\Configuration;
 use Illuminate\Database\Seeder;
-use Log;
 
 /**
  * Class ConfigSeeder.
@@ -37,23 +36,19 @@ class ConfigSeeder extends Seeder
      */
     public function run(): void
     {
-        $entry = Configuration::where('name', 'db_version')->first();
+        $entry       = Configuration::where('name', 'db_version')->first();
         if (null === $entry) {
-            Log::warning('No database version entry is present. Database is assumed to be OLD (version 1).');
-            // FF old or no version present. Put at 1:
             Configuration::create(
                 [
                     'name' => 'db_version',
                     'data' => 1,
                 ]
             );
-        }
-        if (null !== $entry) {
-            $version     = (int)config('firefly.db_version');
-            $entry->data = $version;
-            $entry->save();
 
-            Log::warning(sprintf('Database entry exists. Update to latest version (%d)', $version));
+            return;
         }
+        $version     = (int) config('firefly.db_version');
+        $entry->data = $version;
+        $entry->save();
     }
 }

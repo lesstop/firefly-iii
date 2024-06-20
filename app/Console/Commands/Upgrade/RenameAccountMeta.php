@@ -23,43 +23,33 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\AccountMeta;
 use Illuminate\Console\Command;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class RenameAccountMeta
  */
 class RenameAccountMeta extends Command
 {
-    public const CONFIG_NAME = '480_rename_account_meta';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Rename account meta-data to new format.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:rename-account-meta {--F|force : Force the execution of this command.}';
+    use ShowsFriendlyMessages;
+
+    public const string CONFIG_NAME = '480_rename_account_meta';
+
+    protected $description          = 'Rename account meta-data to new format.';
+
+    protected $signature            = 'firefly-iii:rename-account-meta {--F|force : Force the execution of this command.}';
 
     /**
      * Execute the console command.
      *
-     * @return int
      * @throws FireflyException
      */
     public function handle(): int
     {
-        $start = microtime(true);
-
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
@@ -86,24 +76,15 @@ class RenameAccountMeta extends Command
         $this->markAsExecuted();
 
         if (0 === $count) {
-            $this->line('All account meta is OK.');
+            $this->friendlyPositive('All account meta is OK.');
         }
         if (0 !== $count) {
-            $this->line(sprintf('Renamed %d account meta entries (entry).', $count));
+            $this->friendlyInfo(sprintf('Renamed %d account meta entries (entry).', $count));
         }
-
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Fixed account meta data in %s seconds.', $end));
 
         return 0;
     }
 
-    /**
-     * @return bool
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function isExecuted(): bool
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
@@ -114,9 +95,6 @@ class RenameAccountMeta extends Command
         return false;
     }
 
-    /**
-     *
-     */
     private function markAsExecuted(): void
     {
         app('fireflyconfig')->set(self::CONFIG_NAME, true);

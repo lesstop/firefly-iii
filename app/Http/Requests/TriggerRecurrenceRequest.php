@@ -1,8 +1,8 @@
 <?php
-declare(strict_types=1);
+
 /*
  * TriggerRecurrenceRequest.php
- * Copyright (c) 2022 james@firefly-iii.org
+ * Copyright (c) 2023 james@firefly-iii.org
  *
  * This file is part of Firefly III (https://github.com/firefly-iii).
  *
@@ -20,21 +20,26 @@ declare(strict_types=1);
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+declare(strict_types=1);
+
 namespace FireflyIII\Http\Requests;
 
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Validator;
 
+/**
+ * Class TriggerRecurrenceRequest
+ */
 class TriggerRecurrenceRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
     /**
      * Returns the data required by the controller.
-     *
-     * @return array
      */
     public function getAll(): array
     {
@@ -45,13 +50,18 @@ class TriggerRecurrenceRequest extends FormRequest
 
     /**
      * Rules for this request.
-     *
-     * @return array
      */
     public function rules(): array
     {
         return [
             'date' => 'required|date',
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 }

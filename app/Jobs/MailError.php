@@ -23,19 +23,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Jobs;
 
-use Exception;
-use FireflyIII\Exceptions\FireflyException;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Message;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Log;
-use Mail;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 /**
  * Class MailError.
- *
- * @codeCoverageIgnore
  */
 class MailError extends Job implements ShouldQueue
 {
@@ -49,11 +45,6 @@ class MailError extends Job implements ShouldQueue
 
     /**
      * MailError constructor.
-     *
-     * @param  array  $userData
-     * @param  string  $destination
-     * @param  string  $ipAddress
-     * @param  array  $exceptionData
      */
     public function __construct(array $userData, string $destination, string $ipAddress, array $exceptionData)
     {
@@ -62,16 +53,15 @@ class MailError extends Job implements ShouldQueue
         $this->ipAddress   = $ipAddress;
         $this->exception   = $exceptionData;
         $debug             = $exceptionData;
-        unset($debug['stackTrace']);
-        unset($debug['headers']);
-        Log::error(sprintf('Exception is: %s', json_encode($debug)));
+        unset($debug['stackTrace'], $debug['headers']);
+
+        app('log')->error(sprintf('Exception is: %s', json_encode($debug)));
     }
 
     /**
      * Execute the job.
-     * @throws FireflyException
      */
-    public function handle()
+    public function handle(): void
     {
         $email            = (string)config('firefly.site_owner');
         $args             = $this->exception;
@@ -79,20 +69,98 @@ class MailError extends Job implements ShouldQueue
         $args['user']     = $this->userData;
         $args['ip']       = $this->ipAddress;
         $args['token']    = config('firefly.ipinfo_token');
-        if ($this->attempts() < 3 && strlen($email) > 0) {
+
+        // limit number of error mails that can be sent.
+        if ($this->reachedLimit()) {
+            Log::info('MailError: reached limit, not sending email.');
+
+            return;
+        }
+
+        if ($this->attempts() < 3 && '' !== $email) {
             try {
-                Mail::send(
+                \Mail::send(
                     ['emails.error-html', 'emails.error-text'],
                     $args,
-                    function (Message $message) use ($email) {
+                    static function (Message $message) use ($email): void {
                         if ('mail@example.com' !== $email) {
                             $message->to($email, $email)->subject((string)trans('email.error_subject'));
                         }
                     }
                 );
-            } catch (Exception $e) { // intentional generic exception
-                throw new FireflyException($e->getMessage(), 0, $e);
+            } catch (\Exception|TransportException $e) { // @phpstan-ignore-line
+                $message = $e->getMessage();
+                if (str_contains($message, 'Bcc')) {
+                    app('log')->warning('[Bcc] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
+
+                    return;
+                }
+                if (str_contains($message, 'RFC 2822')) {
+                    app('log')->warning('[RFC] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
+
+                    return;
+                }
+                app('log')->error($e->getMessage());
+                app('log')->error($e->getTraceAsString());
             }
         }
+    }
+
+    private function reachedLimit(): bool
+    {
+        Log::debug('reachedLimit()');
+        $types     = [
+            '5m'  => ['limit' => 5, 'reset' => 5 * 60],
+            '1h'  => ['limit' => 15, 'reset' => 60 * 60],
+            '24h' => ['limit' => 15, 'reset' => 24 * 60 * 60],
+        ];
+        $file      = storage_path('framework/cache/error-count.json');
+        $directory = storage_path('framework/cache');
+        $limits    = [];
+
+        if (!is_writable($directory)) {
+            Log::error(sprintf('MailError: cannot write to "%s", cannot rate limit errors!', $directory));
+
+            return false;
+        }
+
+        if (!file_exists($file)) {
+            Log::debug(sprintf('Wrote new file in "%s"', $file));
+            file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+        }
+        if (file_exists($file)) {
+            Log::debug(sprintf('Read file in "%s"', $file));
+            $limits = json_decode((string)file_get_contents($file), true);
+        }
+        // limit reached?
+        foreach ($types as $type => $info) {
+            Log::debug(sprintf('Now checking limit "%s"', $type), $info);
+            if (!array_key_exists($type, $limits)) {
+                Log::debug(sprintf('Limit "%s" reset to zero, did not exist yet.', $type));
+                $limits[$type] = [
+                    'time' => time(),
+                    'sent' => 0,
+                ];
+            }
+
+            if (time() - $limits[$type]['time'] > $info['reset']) {
+                Log::debug(sprintf('Time past for this limit is %d seconds, exceeding %d seconds. Reset to zero.', time() - $limits[$type]['time'], $info['reset']));
+                $limits[$type] = [
+                    'time' => time(),
+                    'sent' => 0,
+                ];
+            }
+
+            if ($limits[$type]['sent'] > $info['limit']) {
+                Log::warning(sprintf('Sent %d emails in %s, return true.', $limits[$type]['sent'], $type));
+
+                return true;
+            }
+            ++$limits[$type]['sent'];
+        }
+        file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+        Log::debug('No limits reached, return FALSE.');
+
+        return false;
     }
 }

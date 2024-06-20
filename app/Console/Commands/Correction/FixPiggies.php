@@ -23,75 +23,54 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\PiggyBankEvent;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use Illuminate\Console\Command;
 
 /**
- * Report (and fix) piggy banks. Make sure there are only transfers linked to piggy bank events.
+ * Report (and fix) piggy banks.
  *
  * Class FixPiggies
  */
 class FixPiggies extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Fixes common issues with piggy banks.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:fix-piggies';
+    protected $signature   = 'firefly-iii:fix-piggies';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
         $count = 0;
-        $start = microtime(true);
-        $set   = PiggyBankEvent::with(['PiggyBank', 'TransactionJournal', 'TransactionJournal.TransactionType'])->get();
+        $set   = PiggyBankEvent::with(['PiggyBank', 'TransactionJournal'])->get();
 
         /** @var PiggyBankEvent $event */
         foreach ($set as $event) {
             if (null === $event->transaction_journal_id) {
                 continue;
             }
-            /** @var TransactionJournal|null $journal */
+
+            /** @var null|TransactionJournal $journal */
             $journal = $event->transactionJournal;
 
             if (null === $journal) {
                 $event->transaction_journal_id = null;
                 $event->save();
-                $count++;
+                ++$count;
+
                 continue;
-            }
-
-
-            $type = $journal->transactionType->type;
-            if (TransactionType::TRANSFER !== $type) {
-                $event->transaction_journal_id = null;
-                $event->save();
-                $this->line(sprintf('Piggy bank #%d was referenced by an invalid event. This has been fixed.', $event->piggy_bank_id));
-                $count++;
             }
         }
         if (0 === $count) {
-            $this->line('All piggy bank events are correct.');
+            $this->friendlyPositive('All piggy bank events are OK.');
         }
         if (0 !== $count) {
-            $this->line(sprintf('Fixed %d piggy bank event(s).', $count));
+            $this->friendlyInfo(sprintf('Fixed %d piggy bank event(s).', $count));
         }
-
-        $end = round(microtime(true) - $start, 2);
-        $this->line(sprintf('Verified the content of %d piggy bank events in %s seconds.', $set->count(), $end));
 
         return 0;
     }

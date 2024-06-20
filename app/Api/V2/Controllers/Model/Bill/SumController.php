@@ -26,8 +26,8 @@ namespace FireflyIII\Api\V2\Controllers\Model\Bill;
 
 use FireflyIII\Api\V2\Controllers\Controller;
 use FireflyIII\Api\V2\Request\Generic\DateRequest;
-use FireflyIII\Repositories\Bill\BillRepositoryInterface;
-use FireflyIII\Support\Http\Api\ConvertsExchangeRates;
+use FireflyIII\Repositories\UserGroups\Bill\BillRepositoryInterface;
+use FireflyIII\Support\Http\Api\ValidatesUserGroupTrait;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -35,48 +35,52 @@ use Illuminate\Http\JsonResponse;
  */
 class SumController extends Controller
 {
-    use ConvertsExchangeRates;
+    use ValidatesUserGroupTrait;
 
     private BillRepositoryInterface $repository;
 
-    /**
-     *
-     */
     public function __construct()
     {
+        parent::__construct();
         $this->middleware(
             function ($request, $next) {
                 $this->repository = app(BillRepositoryInterface::class);
+                $this->repository->setUserGroup($this->validateUserGroup($request));
+
                 return $next($request);
             }
         );
     }
 
     /**
-     * @param  DateRequest  $request
-     * @return JsonResponse
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v2)#/transactions-sum/getBillsPaidTrSum
+     *
+     * TODO see autocomplete/accountcontroller for list.
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function paid(DateRequest $request): JsonResponse
     {
-        $dates     = $request->getAll();
-        $result    = $this->repository->sumPaidInRange($dates['start'], $dates['end']);
-        $converted = $this->cerSum($result);
+        $result = $this->repository->sumPaidInRange($this->parameters->get('start'), $this->parameters->get('end'));
 
         // convert to JSON response:
-        return response()->api($converted);
+        return response()->api(array_values($result));
     }
 
     /**
-     * @param  DateRequest  $request
-     * @return JsonResponse
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v2)#/transactions-sum/getBillsUnpaidTrSum
+     *
+     * TODO see autocomplete/accountcontroller for list.
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
     public function unpaid(DateRequest $request): JsonResponse
     {
-        $dates     = $request->getAll();
-        $result    = $this->repository->sumUnpaidInRange($dates['start'], $dates['end']);
-        $converted = $this->cerSum($result);
+        $result = $this->repository->sumUnpaidInRange($this->parameters->get('start'), $this->parameters->get('end'));
 
         // convert to JSON response:
-        return response()->api($converted);
+        return response()->api(array_values($result));
     }
 }

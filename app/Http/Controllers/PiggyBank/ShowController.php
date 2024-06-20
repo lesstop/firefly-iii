@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\PiggyBank;
 
 use Carbon\Carbon;
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
@@ -42,8 +43,6 @@ class ShowController extends Controller
 
     /**
      * PiggyBankController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -64,16 +63,16 @@ class ShowController extends Controller
     /**
      * Show a single piggy bank.
      *
-     * @param  PiggyBank  $piggyBank
-     *
      * @return Factory|View
+     *
+     * @throws FireflyException
      */
     public function show(PiggyBank $piggyBank)
     {
         /** @var Carbon $end */
-        $end = session('end', Carbon::now()->endOfMonth());
+        $end         = session('end', today(config('app.timezone'))->endOfMonth());
         // transform piggies using the transformer:
-        $parameters = new ParameterBag();
+        $parameters  = new ParameterBag();
         $parameters->set('end', $end);
 
         /** @var PiggyBankTransformer $transformer */

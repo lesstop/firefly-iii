@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 
 /**
@@ -34,45 +35,71 @@ class ChangesForV472 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
-        Schema::table(
-            'attachments',
-            static function (Blueprint $table) {
-                $table->text('notes')->nullable();
+        if (!Schema::hasColumn('attachments', 'notes')) {
+            try {
+                Schema::table(
+                    'attachments',
+                    static function (Blueprint $table): void {
+                        $table->text('notes')->nullable();
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
-        Schema::table(
-            'budgets',
-            static function (Blueprint $table) {
-                $table->dropColumn('order');
+        }
+
+        if (Schema::hasColumn('transactions', 'order')) {
+            try {
+                Schema::table(
+                    'budgets',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn('order');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
-     * @SuppressWarnings(PHPMD.ShortMethodName)
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        Schema::table(
-            'attachments',
-            static function (Blueprint $table) {
-                $table->dropColumn('notes');
+        if (Schema::hasColumn('attachments', 'notes')) {
+            try {
+                Schema::table(
+                    'attachments',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn('notes');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
 
-        Schema::table(
-            'budgets',
-            static function (Blueprint $table) {
-                $table->mediumInteger('order', false, true)->default(0);
+        if (!Schema::hasColumn('budgets', 'order')) {
+            try {
+                Schema::table(
+                    'budgets',
+                    static function (Blueprint $table): void {
+                        $table->mediumInteger('order', false, true)->default(0);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

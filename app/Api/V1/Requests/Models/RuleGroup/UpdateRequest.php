@@ -30,18 +30,15 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * @codeCoverageIgnore
  * Class UpdateRequest
  */
 class UpdateRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
     /**
      * Get all data from the request.
-     *
-     * @return array
      */
     public function getAll(): array
     {
@@ -58,8 +55,6 @@ class UpdateRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -67,8 +62,8 @@ class UpdateRequest extends FormRequest
         $ruleGroup = $this->route()->parameter('ruleGroup');
 
         return [
-            'title'       => 'between:1,100|uniqueObjectForUser:rule_groups,title,'.$ruleGroup->id,
-            'description' => 'between:1,5000|nullable',
+            'title'       => 'min:1|max:100|uniqueObjectForUser:rule_groups,title,'.$ruleGroup->id,
+            'description' => 'min:1|max:32768|nullable',
             'active'      => [new IsBoolean()],
         ];
     }

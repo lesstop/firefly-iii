@@ -26,6 +26,7 @@ namespace FireflyIII\Api\V1\Requests\Models\Account;
 
 use FireflyIII\Models\Location;
 use FireflyIII\Rules\IsBoolean;
+use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Rules\UniqueAccountNumber;
 use FireflyIII\Rules\UniqueIban;
 use FireflyIII\Support\Request\AppendsLocationData;
@@ -35,18 +36,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Class StoreRequest
- *
- * @codeCoverageIgnore
  */
 class StoreRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use AppendsLocationData;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
-    /**
-     * @return array
-     */
     public function getAllAccountData(): array
     {
         $active          = true;
@@ -57,7 +53,7 @@ class StoreRequest extends FormRequest
         if (null !== $this->get('include_net_worth')) {
             $includeNetWorth = $this->boolean('include_net_worth');
         }
-        $data = [
+        $data            = [
             'name'                    => $this->convertString('name'),
             'active'                  => $active,
             'include_net_worth'       => $includeNetWorth,
@@ -67,7 +63,7 @@ class StoreRequest extends FormRequest
             'order'                   => $this->convertInteger('order'),
             'currency_code'           => $this->convertString('currency_code'),
             'virtual_balance'         => $this->convertString('virtual_balance'),
-            'iban'                    => $this->convertString('iban'),
+            'iban'                    => $this->convertIban('iban'),
             'BIC'                     => $this->convertString('bic'),
             'account_number'          => $this->convertString('account_number'),
             'account_role'            => $this->convertString('account_role'),
@@ -80,14 +76,12 @@ class StoreRequest extends FormRequest
             'interest_period'         => $this->convertString('interest_period'),
         ];
         // append location information.
-        $data = $this->appendLocationData($data, null);
+        $data            = $this->appendLocationData($data, null);
 
         if ('liability' === $data['account_type_name'] || 'liabilities' === $data['account_type_name']) {
-            $data['opening_balance']      = app('steam')->negative($this->convertString('liability_amount'));
-            $data['opening_balance_date'] = $this->getCarbonDate('liability_start_date');
-            $data['account_type_name']    = $this->convertString('liability_type');
-            $data['liability_direction']  = $this->convertString('liability_direction');
-            $data['account_type_id']      = null;
+            $data['account_type_name']   = $this->convertString('liability_type');
+            $data['liability_direction'] = $this->convertString('liability_direction');
+            $data['account_type_id']     = null;
         }
 
         return $data;
@@ -95,8 +89,6 @@ class StoreRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -105,11 +97,11 @@ class StoreRequest extends FormRequest
         $ccPaymentTypes = implode(',', array_keys(config('firefly.ccTypes')));
         $type           = $this->convertString('type');
         $rules          = [
-            'name'                 => 'required|min:1|uniqueAccountForUser',
-            'type'                 => 'required|min:1|'.sprintf('in:%s', $types),
+            'name'                 => 'required|max:1024|min:1|uniqueAccountForUser',
+            'type'                 => 'required|max:1024|min:1|'.sprintf('in:%s', $types),
             'iban'                 => ['iban', 'nullable', new UniqueIban(null, $type)],
             'bic'                  => 'bic|nullable',
-            'account_number'       => ['between:1,255', 'nullable', new UniqueAccountNumber(null, $type)],
+            'account_number'       => ['min:1', 'max:255', 'nullable', new UniqueAccountNumber(null, $type)],
             'opening_balance'      => 'numeric|required_with:opening_balance_date|nullable',
             'opening_balance_date' => 'date|required_with:opening_balance|nullable',
             'virtual_balance'      => 'numeric|nullable',
@@ -122,12 +114,12 @@ class StoreRequest extends FormRequest
             'credit_card_type'     => sprintf('nullable|in:%s|required_if:account_role,ccAsset', $ccPaymentTypes),
             'monthly_payment_date' => 'nullable|date|required_if:account_role,ccAsset|required_if:credit_card_type,monthlyFull',
             'liability_type'       => 'nullable|required_if:type,liability|required_if:type,liabilities|in:loan,debt,mortgage',
-            'liability_amount'     => 'required_with:liability_start_date|min:0|numeric',
+            'liability_amount'     => ['required_with:liability_start_date', new IsValidPositiveAmount()],
             'liability_start_date' => 'required_with:liability_amount|date',
             'liability_direction'  => 'nullable|required_if:type,liability|required_if:type,liabilities|in:credit,debit',
-            'interest'             => 'between:0,100|numeric',
-            'interest_period'      => sprintf('nullable|in:%s', join(',', config('firefly.interest_periods'))),
-            'notes'                => 'min:0|max:65536',
+            'interest'             => 'min:0|max:100|numeric',
+            'interest_period'      => sprintf('nullable|in:%s', implode(',', config('firefly.interest_periods'))),
+            'notes'                => 'min:0|max:32768',
         ];
 
         return Location::requestRules($rules);

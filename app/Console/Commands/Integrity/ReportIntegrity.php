@@ -23,29 +23,19 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Integrity;
 
-use Artisan;
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use Illuminate\Console\Command;
-use Schema;
 
 /**
  * Class ReportIntegrity
- *
- * @codeCoverageIgnore
  */
 class ReportIntegrity extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Will report on the integrity of your database.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:report-integrity';
+
+    protected $signature   = 'firefly-iii:report-integrity';
 
     /**
      * Execute the console command.
@@ -53,18 +43,18 @@ class ReportIntegrity extends Command
     public function handle(): int
     {
         // if table does not exist, return false
-        if (!Schema::hasTable('users')) {
+        if (!\Schema::hasTable('users')) {
             return 1;
         }
         $commands = [
+            'firefly-iii:create-group-memberships',
             'firefly-iii:report-empty-objects',
             'firefly-iii:report-sum',
+            'firefly-iii:upgrade-group-information',
         ];
         foreach ($commands as $command) {
-            $this->line(sprintf('Now executing %s', $command));
-            Artisan::call($command);
-            $result = Artisan::output();
-            echo $result;
+            $this->friendlyLine(sprintf('Now executing %s', $command));
+            $this->call($command);
         }
 
         return 0;

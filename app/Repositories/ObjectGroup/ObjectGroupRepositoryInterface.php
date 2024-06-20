@@ -26,6 +26,7 @@ namespace FireflyIII\Repositories\ObjectGroup;
 
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -43,28 +44,12 @@ interface ObjectGroupRepositoryInterface
      */
     public function deleteEmpty(): void;
 
-    /**
-     * @param  ObjectGroup  $objectGroup
-     */
     public function destroy(ObjectGroup $objectGroup): void;
 
-    /**
-     * @return Collection
-     */
     public function get(): Collection;
 
-    /**
-     * @param  ObjectGroup  $objectGroup
-     *
-     * @return Collection
-     */
     public function getBills(ObjectGroup $objectGroup): Collection;
 
-    /**
-     * @param  ObjectGroup  $objectGroup
-     *
-     * @return Collection
-     */
     public function getPiggyBanks(ObjectGroup $objectGroup): Collection;
 
     /**
@@ -72,32 +57,11 @@ interface ObjectGroupRepositoryInterface
      */
     public function resetOrder(): void;
 
-    /**
-     * @param  string  $query
-     * @param  int  $limit
-     *
-     * @return Collection
-     */
     public function search(string $query, int $limit): Collection;
 
-    /**
-     * @param  ObjectGroup  $objectGroup
-     * @param  int  $newOrder
-     *
-     * @return ObjectGroup
-     */
     public function setOrder(ObjectGroup $objectGroup, int $newOrder): ObjectGroup;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user): void;
+    public function setUser(null|Authenticatable|User $user): void;
 
-    /**
-     * @param  ObjectGroup  $objectGroup
-     * @param  array  $data
-     *
-     * @return ObjectGroup
-     */
     public function update(ObjectGroup $objectGroup, array $data): ObjectGroup;
 }

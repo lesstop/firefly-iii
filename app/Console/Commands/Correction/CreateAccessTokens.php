@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
-use Exception;
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Console\Command;
@@ -33,24 +33,16 @@ use Illuminate\Console\Command;
  */
 class CreateAccessTokens extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Creates user access tokens which are used for command line access to personal data.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:create-access-tokens';
+
+    protected $signature   = 'firefly-iii:create-access-tokens';
 
     /**
      * Execute the console command.
      *
-     * @return int
-     * @throws Exception
+     * @throws \Exception
      */
     public function handle(): int
     {
@@ -58,24 +50,22 @@ class CreateAccessTokens extends Command
         /** @var UserRepositoryInterface $repository */
         $repository = app(UserRepositoryInterface::class);
 
-        $start = microtime(true);
-        $count = 0;
-        $users = $repository->all();
+        $count      = 0;
+        $users      = $repository->all();
+
         /** @var User $user */
         foreach ($users as $user) {
             $pref = app('preferences')->getForUser($user, 'access_token');
             if (null === $pref) {
                 $token = $user->generateAccessToken();
                 app('preferences')->setForUser($user, 'access_token', $token);
-                $this->line(sprintf('Generated access token for user %s', $user->email));
+                $this->friendlyInfo(sprintf('Generated access token for user %s', $user->email));
                 ++$count;
             }
         }
         if (0 === $count) {
-            $this->info('All access tokens OK!');
+            $this->friendlyPositive('Verified access tokens.');
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Verify access tokens in %s seconds.', $end));
 
         return 0;
     }

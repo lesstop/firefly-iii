@@ -32,6 +32,7 @@ use FireflyIII\Models\Preference;
 use FireflyIII\Transformers\PreferenceTransformer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 use League\Fractal\Resource\Item;
@@ -41,36 +42,34 @@ use League\Fractal\Resource\Item;
  */
 class PreferencesController extends Controller
 {
-    public const DATE_FORMAT  = 'Y-m-d';
-    public const RESOURCE_KEY = 'preferences';
+    public const string DATE_FORMAT  = 'Y-m-d';
+    public const string RESOURCE_KEY = 'preferences';
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/preferences/listPreference
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/preferences/listPreference
      *
      * List all of them.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
         $collection  = app('preferences')->all();
         $manager     = $this->getManager();
         $count       = $collection->count();
-        $pageSize    = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
         $preferences = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($preferences, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($preferences, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.preferences.index').$this->buildParams());
 
         /** @var PreferenceTransformer $transformer */
         $transformer = app(PreferenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($preferences, $transformer, self::RESOURCE_KEY);
+        $resource    = new FractalCollection($preferences, $transformer, self::RESOURCE_KEY);
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -78,72 +77,100 @@ class PreferencesController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/preferences/getPreference
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/preferences/getPreference
      *
      * Return a single preference by name.
-     *
-     * @param  Preference  $preference
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
      */
     public function show(Preference $preference): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
+
+        if ('currencyPreference' === $preference->name) {
+            throw new FireflyException('Please use api/v1/currencies/default instead.');
+        }
+
         /** @var PreferenceTransformer $transformer */
         $transformer = app(PreferenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($preference, $transformer, 'preferences');
+        $resource    = new Item($preference, $transformer, 'preferences');
+
+        return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
+    }
+
+    /**
+     * TODO This endpoint is not documented.
+     *
+     * Return a single preference by name.
+     */
+    public function showList(Collection $collection): JsonResponse
+    {
+        $manager     = $this->getManager();
+        $count       = $collection->count();
+        $pageSize    = $this->parameters->get('limit');
+        $preferences = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // make paginator:
+        $paginator   = new LengthAwarePaginator($preferences, $count, $pageSize, $this->parameters->get('page'));
+        $paginator->setPath(route('api.v1.preferences.show-list').$this->buildParams());
+
+        /** @var PreferenceTransformer $transformer */
+        $transformer = app(PreferenceTransformer::class);
+        $transformer->setParameters($this->parameters);
+
+        $resource    = new FractalCollection($preferences, $transformer, self::RESOURCE_KEY);
+        $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/preferences/storePreference
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/preferences/storePreference
      *
-     * @param  PreferenceStoreRequest  $request
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function store(PreferenceStoreRequest $request): JsonResponse
     {
-        $manager = $this->getManager();
-        $data    = $request->getAll();
-        $pref    = app('preferences')->set($data['name'], $data['data']);
+        $manager     = $this->getManager();
+        $data        = $request->getAll();
+
+        if ('currencyPreference' === $data['name']) {
+            throw new FireflyException('Please use api/v1/currencies/default instead.');
+        }
+
+        $pref        = app('preferences')->set($data['name'], $data['data']);
 
         /** @var PreferenceTransformer $transformer */
         $transformer = app(PreferenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($pref, $transformer, 'preferences');
+        $resource    = new Item($pref, $transformer, 'preferences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/preferences/updatePreference
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/preferences/updatePreference
      *
-     * @param  PreferenceUpdateRequest  $request
-     * @param  Preference  $preference
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function update(PreferenceUpdateRequest $request, Preference $preference): JsonResponse
     {
-        $manager = $this->getManager();
-        $data    = $request->getAll();
-        $pref    = app('preferences')->set($preference->name, $data['data']);
+        if ('currencyPreference' === $preference->name) {
+            throw new FireflyException('Please use api/v1/currencies/default instead.');
+        }
+
+        $manager     = $this->getManager();
+        $data        = $request->getAll();
+        $pref        = app('preferences')->set($preference->name, $data['data']);
 
         /** @var PreferenceTransformer $transformer */
         $transformer = app(PreferenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($pref, $transformer, 'preferences');
+        $resource    = new Item($pref, $transformer, 'preferences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

@@ -21,6 +21,13 @@
 
 declare(strict_types=1);
 
+$paths = [realpath(base_path('resources/views'))];
+if ('v2' === env('FIREFLY_III_LAYOUT')) {
+    $paths = [
+        realpath(base_path('resources/views/v2')),
+        realpath(base_path('resources/views'))];
+}
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -32,10 +39,8 @@ return [
     | the usual Laravel view path has already been registered for you.
     |
     */
-
-    'paths' => [
-        realpath(base_path('resources/views')),
-    ],
+    'layout'   => env('FIREFLY_III_LAYOUT', 'v1'),
+    'paths'    => $paths,
 
     /*
     |--------------------------------------------------------------------------
@@ -49,5 +54,4 @@ return [
     */
 
     'compiled' => realpath(storage_path('framework/views')),
-
 ];

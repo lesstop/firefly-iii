@@ -20,18 +20,22 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-# Install composer packages
-#composer install --no-scripts --no-ansi
-
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-
-# enable test .env file.
-# cp .ci/.env.ci .env
 
 # clean up php code
 cd $SCRIPT_DIR/php-cs-fixer
-composer update
-./vendor/bin/php-cs-fixer fix --config $SCRIPT_DIR/php-cs-fixer/.php-cs-fixer.php --allow-risky=yes
+composer update --quiet
+rm -f .php-cs-fixer.cache
+PHP_CS_FIXER_IGNORE_ENV=true
+./vendor/bin/php-cs-fixer fix \
+    --config $SCRIPT_DIR/php-cs-fixer/.php-cs-fixer.php \
+    --format=txt \
+    --allow-risky=yes
+
+EXIT_CODE=$?
+
+echo "Exit code for CS fixer is $EXIT_CODE."
+
 cd $SCRIPT_DIR/..
 
-exit 0
+exit $EXIT_CODE

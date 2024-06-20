@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Integrity;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Console\Command;
@@ -32,23 +33,13 @@ use Illuminate\Console\Command;
  */
 class ReportSum extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Report on the total sum of transactions. Must be 0.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:report-sum';
+    protected $signature   = 'firefly-iii:report-sum';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
@@ -62,22 +53,25 @@ class ReportSum extends Command
      */
     private function reportSum(): void
     {
-        $start = microtime(true);
         /** @var UserRepositoryInterface $userRepository */
         $userRepository = app(UserRepositoryInterface::class);
 
         /** @var User $user */
         foreach ($userRepository->all() as $user) {
             $sum = (string)$user->transactions()->sum('amount');
+            if (!is_numeric($sum)) {
+                $message = sprintf('Error: Transactions for user #%d (%s) have an invalid sum ("%s").', $user->id, $user->email, $sum);
+                $this->friendlyError($message);
+
+                continue;
+            }
             if (0 !== bccomp($sum, '0')) {
                 $message = sprintf('Error: Transactions for user #%d (%s) are off by %s!', $user->id, $user->email, $sum);
-                $this->error($message);
+                $this->friendlyError($message);
             }
             if (0 === bccomp($sum, '0')) {
-                $this->info(sprintf('Amount integrity OK for user #%d', $user->id));
+                $this->friendlyPositive(sprintf('Amount integrity OK for user #%d', $user->id));
             }
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Report on total sum finished in %s seconds', $end));
     }
 }

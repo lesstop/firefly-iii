@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -35,50 +36,75 @@ class ChangesForV473 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
-        Schema::table(
-            'bills',
-            static function (Blueprint $table) {
-                // cannot drop foreign keys in SQLite:
-                if ('sqlite' !== config('database.default')) {
-                    $table->dropForeign('bills_transaction_currency_id_foreign');
-                }
-                $table->dropColumn('transaction_currency_id');
+        if (!Schema::hasColumn('bills', 'transaction_currency_id')) {
+            try {
+                Schema::table(
+                    'bills',
+                    static function (Blueprint $table): void {
+                        // cannot drop foreign keys in SQLite:
+                        if ('sqlite' !== config('database.default')) {
+                            $table->dropForeign('bills_transaction_currency_id_foreign');
+                        }
+                        $table->dropColumn('transaction_currency_id');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
 
-        Schema::table(
-            'rules',
-            static function (Blueprint $table) {
-                $table->dropColumn('strict');
+        if (!Schema::hasColumn('rules', 'strict')) {
+            try {
+                Schema::table(
+                    'rules',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn('strict');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
-     * @SuppressWarnings(PHPMD.ShortMethodName)
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        Schema::table(
-            'bills',
-            static function (Blueprint $table) {
-                $table->integer('transaction_currency_id', false, true)->nullable()->after('user_id');
-                $table->foreign('transaction_currency_id')->references('id')->on('transaction_currencies')->onDelete('set null');
+        if (!Schema::hasColumn('bills', 'transaction_currency_id')) {
+            try {
+                Schema::table(
+                    'bills',
+                    static function (Blueprint $table): void {
+                        $table->integer('transaction_currency_id', false, true)->nullable()->after('user_id');
+                        $table->foreign('transaction_currency_id')->references('id')->on('transaction_currencies')->onDelete('set null');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
-        Schema::table(
-            'rules',
-            static function (Blueprint $table) {
-                $table->boolean('strict')->default(true);
+        }
+        if (!Schema::hasColumn('rules', 'strict')) {
+            try {
+                Schema::table(
+                    'rules',
+                    static function (Blueprint $table): void {
+                        $table->boolean('strict')->default(true);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

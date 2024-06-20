@@ -23,20 +23,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Services\Internal\Destroy;
 
-use DB;
-use Exception;
 use FireflyIII\Models\Budget;
 
 /**
  * Class BudgetDestroyService
- *
- * @codeCoverageIgnore
  */
 class BudgetDestroyService
 {
-    /**
-     * @param  Budget  $budget
-     */
     public function destroy(Budget $budget): void
     {
         $budget->delete();
@@ -47,12 +40,14 @@ class BudgetDestroyService
         }
 
         // also delete all relations between categories and transaction journals:
-        DB::table('budget_transaction_journal')->where('budget_id', (int)$budget->id)->delete();
+        \DB::table('budget_transaction_journal')->where('budget_id', $budget->id)->delete();
 
         // also delete all relations between categories and transactions:
-        DB::table('budget_transaction')->where('budget_id', (int)$budget->id)->delete();
+        \DB::table('budget_transaction')->where('budget_id', $budget->id)->delete();
 
         // also delete all budget limits
-        $budget->budgetlimits()->delete();
+        foreach ($budget->budgetlimits()->get() as $limit) {
+            $limit->delete();
+        }
     }
 }

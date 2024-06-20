@@ -1,71 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  ~ phpunit.xml
-  ~ Copyright (c) 2020 james@firefly-iii.org
-  ~
-  ~ This file is part of Firefly III (https://github.com/firefly-iii).
-  ~
-  ~ This program is free software: you can redistribute it and/or modify
-  ~ it under the terms of the GNU Affero General Public License as
-  ~ published by the Free Software Foundation, either version 3 of the
-  ~ License, or (at your option) any later version.
-  ~
-  ~ This program is distributed in the hope that it will be useful,
-  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
-  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  ~ GNU Affero General Public License for more details.
-  ~
-  ~ You should have received a copy of the GNU Affero General Public License
-  ~ along with this program.  If not, see <https://www.gnu.org/licenses/>.
-  -->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.2/phpunit.xsd"
          backupGlobals="false"
-         backupStaticAttributes="false"
+         backupStaticProperties="false"
+         beStrictAboutOutputDuringTests="true"
          bootstrap="vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
          colors="true"
-         convertErrorsToExceptions="true"
-         stopOnFailure="true"
-         convertNoticesToExceptions="true"
-         convertWarningsToExceptions="true"
+         executionOrder="depends,defects"
+         failOnRisky="true"
+         failOnWarning="true"
          processIsolation="false"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd">
-    <coverage processUncoveredFiles="true">
-        <include>
-            <directory suffix=".php">./app</directory>
-        </include>
-    </coverage>
-    <testsuites>
-        <testsuite name="Api">
-            <directory suffix="Test.php">./tests/Api/Models/TransactionCurrency</directory>
-            <!--
-            <directory suffix="Test.php">./tests/Api</directory>
-
-            <directory suffix="Test.php">./tests/Api/Models/Account</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Attachment</directory>
-            <directory suffix="Test.php">./tests/Api/Models/AvailableBudget</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Bill</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Budget</directory>
-            <directory suffix="Test.php">./tests/Api/Models/BudgetLimit</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Category</directory>
-            <directory suffix="Test.php">./tests/Api/Models/ObjectGroup</directory>
-            <directory suffix="Test.php">./tests/Api/Models/PiggyBank</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Recurrence</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Rule</directory>
-            <directory suffix="Test.php">./tests/Api/Models/RuleGroup</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Tag</directory>
-            <directory suffix="Test.php">./tests/Api/Models/Transaction</directory>
-            <directory suffix="Test.php">./tests/Api/Models/TransactionLink</directory>
-            <directory suffix="Test.php">./tests/Api/Models/TransactionLinkType</directory>
-            <directory suffix="Test.php">./tests/Api/Webhook</directory>
-            <directory suffix="Test.php">./tests/Api/Models/TransactionCurrency</directory>
-                    -->
-
-        </testsuite>
-    </testsuites>
+         stopOnFailure="true">
     <php>
         <env name="APP_ENV" value="testing"/>
-        <env name="CACHE_DRIVER" value="array"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="QUEUE_DRIVER" value="sync"/>
+        <env name="APP_LOG_ENV" value="notice"/>
+        <ini name="xdebug.mode" value="coverage"/>
     </php>
+    <testsuites>
+        <testsuite name="all">
+            <directory suffix="Test.php">./tests</directory>
+        </testsuite>
+        <testsuite name="unit">
+            <directory suffix="Test.php">./tests/unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory suffix="Test.php">./tests/integration</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory suffix=".php">app</directory>
+        </include>
+    </source>
+    <coverage ignoreDeprecatedCodeUnits="true"
+              pathCoverage="true">
+        <report>
+            <clover outputFile="coverage.xml"/>
+        </report>
+    </coverage>
 </phpunit>

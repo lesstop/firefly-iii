@@ -27,9 +27,5 @@ use Illuminate\Cookie\Middleware\EncryptCookies as Middleware;
 
 /**
  * Class EncryptCookies
- *
- * @codeCoverageIgnore
  */
-class EncryptCookies extends Middleware
-{
-}
+class EncryptCookies extends Middleware {}

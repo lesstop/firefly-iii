@@ -29,11 +29,12 @@ use FireflyIII\Repositories\Account\AccountTasker;
 use FireflyIII\Repositories\Account\AccountTaskerInterface;
 use FireflyIII\Repositories\Account\OperationsRepository;
 use FireflyIII\Repositories\Account\OperationsRepositoryInterface;
+use FireflyIII\Repositories\UserGroups\Account\AccountRepository as AdminAccountRepository;
+use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface as AdminAccountRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * @codeCoverageIgnore
  * Class AccountServiceProvider.
  */
 class AccountServiceProvider extends ServiceProvider
@@ -41,9 +42,7 @@ class AccountServiceProvider extends ServiceProvider
     /**
      * Bootstrap the application services.
      */
-    public function boot(): void
-    {
-    }
+    public function boot(): void {}
 
     /**
      * Register the application services.
@@ -61,9 +60,24 @@ class AccountServiceProvider extends ServiceProvider
     {
         $this->app->bind(
             AccountRepositoryInterface::class,
-            function (Application $app) {
+            static function (Application $app) {
                 /** @var AccountRepositoryInterface $repository */
                 $repository = app(AccountRepository::class);
+
+                // phpstan thinks auth does not exist.
+                if ($app->auth->check()) { // @phpstan-ignore-line
+                    $repository->setUser(auth()->user());
+                }
+
+                return $repository;
+            }
+        );
+
+        $this->app->bind(
+            AdminAccountRepositoryInterface::class,
+            static function (Application $app) {
+                /** @var AdminAccountRepositoryInterface $repository */
+                $repository = app(AdminAccountRepository::class);
 
                 // phpstan thinks auth does not exist.
                 if ($app->auth->check()) { // @phpstan-ignore-line
@@ -97,7 +111,7 @@ class AccountServiceProvider extends ServiceProvider
     {
         $this->app->bind(
             AccountTaskerInterface::class,
-            function (Application $app) {
+            static function (Application $app) {
                 /** @var AccountTaskerInterface $tasker */
                 $tasker = app(AccountTasker::class);
 

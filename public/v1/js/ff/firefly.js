@@ -20,8 +20,15 @@
 /** global: moment, token, dateRangeMeta,dateRangeConfig, accountingConfig, accounting, currencySymbol, mon_decimal_point, frac_digits, showFullList, showOnlyTop, mon_thousands_sep */
 
 
+$.ajaxSetup({
+    headers: {
+        'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content')
+    }
+});
+
 $(function () {
     "use strict";
+
 
     configAccounting(currencySymbol);
 
@@ -37,11 +44,7 @@ $(function () {
         $('button[type="submit"]').prop('disabled', true);
     });
 
-    $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content')
-                    }
-                });
+
 
     // when you click on a currency, this happens:
     $('.currency-option').on('click', currencySelect);
@@ -69,11 +72,18 @@ $(function () {
         function (start, end, label) {
 
             // send post.
-            $.post(dateRangeMeta.url, {
-                start: start.format('YYYY-MM-DD'),
-                end: end.format('YYYY-MM-DD'),
-                label: label,
-                _token: token
+            $.ajax({
+                url: dateRangeMeta.url,
+                data: {
+                    start: start.format('YYYY-MM-DD'),
+                    end: end.format('YYYY-MM-DD'),
+                    label: label
+                },
+                type: 'POST',
+                headers: {
+                    'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content'),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
             }).done(function () {
                 window.location.reload(true);
             }).fail(function () {
@@ -159,18 +169,20 @@ function listLengthInitial() {
 function triggerList(e) {
     "use strict";
     var link = $(e.target);
-    var table = link.parent().parent().parent().parent();
+    var table = $(link.parent().parent().parent().parent());
     if (table.attr('data-hidden') === 'no') {
         // hide all elements, return false.
         table.find('.overListLength').hide();
         table.attr('data-hidden', 'yes');
         link.text(showFullList);
+        return false;
     }
     if (table.attr('data-hidden') !== 'no') {
         // show all, return false
         table.find('.overListLength').show();
         table.attr('data-hidden', 'no');
         link.text(showOnlyTop);
+        return false;
     }
 
     return false;

@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -31,26 +32,42 @@ class AddLdapColumnsToUsersTable extends Migration
     /**
      * Reverse the migrations.
      */
-    public function down()
+    public function down(): void
     {
-        Schema::table(
-            'users',
-            function (Blueprint $table) {
-                $table->dropColumn(['domain']);
+        if (Schema::hasColumn('users', 'domain')) {
+            try {
+                Schema::table(
+                    'users',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn(['domain']);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
+     *
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
-    public function up()
+    public function up(): void
     {
-        Schema::table(
-            'users',
-            function (Blueprint $table) {
-                $table->string('domain')->nullable();
+        if (!Schema::hasColumn('users', 'domain')) {
+            try {
+                Schema::table(
+                    'users',
+                    static function (Blueprint $table): void {
+                        $table->string('domain')->nullable();
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

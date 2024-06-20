@@ -1,9 +1,20 @@
 /node_modules
-/frontend/node_modules
 /storage/*.key
 /vendor
-/.vagrant
+public/hot
 npm-debug.log
 yarn-error.log
 .env
 /.ci/php-cs-fixer/vendor
+coverage.xml
+
+# ignore generated files.
+public/build
+
+# ignore v1 build files
+resources/assets/v1/node_modules
+resources/assets/v1/build
+
+# ignore v2 build files
+resources/assets/v2/node_modules
+resources/assets/v2/build

@@ -21,6 +21,8 @@
 
 declare(strict_types=1);
 
+use FireflyIII\User;
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -34,13 +36,13 @@ return [
     |
     */
 
-    'mailgun' => [
+    'mailgun'   => [
         'domain'   => env('MAILGUN_DOMAIN'),
         'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
         'secret'   => env('MAILGUN_SECRET'),
     ],
 
-    'ses' => [
+    'ses'       => [
         'key'    => env('SES_KEY'),
         'secret' => env('SES_SECRET'),
         'region' => 'us-east-1',
@@ -50,12 +52,12 @@ return [
         'secret' => env('SPARKPOST_SECRET'),
     ],
 
-    'stripe'   => [
-        'model'  => FireflyIII\User::class,
+    'stripe'    => [
+        'model'  => User::class,
         'key'    => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
     ],
-    'mandrill' => [
+    'mandrill'  => [
         'secret' => env('MANDRILL_SECRET'),
     ],
 ];

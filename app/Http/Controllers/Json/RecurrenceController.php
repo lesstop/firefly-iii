@@ -24,15 +24,13 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\Json;
 
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\RecurrenceRepetition;
 use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class RecurrenceController
@@ -43,8 +41,6 @@ class RecurrenceController extends Controller
 
     /**
      * RecurrenceController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -63,24 +59,32 @@ class RecurrenceController extends Controller
     /**
      * Shows all events for a repetition. Used in calendar.
      *
-     * @param  Request  $request
-     *
-     * @return JsonResponse
+     * @SuppressWarnings(PHPMD.NPathComplexity)
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      *
      * @throws FireflyException
      */
     public function events(Request $request): JsonResponse
     {
-        $occurrences = [];
-        $return           = [];
-        $start            = Carbon::createFromFormat('Y-m-d', $request->get('start'));
-        $end              = Carbon::createFromFormat('Y-m-d', $request->get('end'));
-        $firstDate        = Carbon::createFromFormat('Y-m-d', $request->get('first_date'));
-        $endDate          = '' !== (string)$request->get('end_date') ? Carbon::createFromFormat('Y-m-d', $request->get('end_date')) : null;
-        $endsAt           = (string)$request->get('ends');
-        $repetitionType   = explode(',', $request->get('type'))[0];
-        $repetitions      = (int)$request->get('reps');
-        $repetitionMoment = '';
+        $occurrences                   = [];
+        $return                        = [];
+        $start                         = Carbon::createFromFormat('Y-m-d', $request->get('start'));
+        $end                           = Carbon::createFromFormat('Y-m-d', $request->get('end'));
+        $firstDate                     = Carbon::createFromFormat('Y-m-d', $request->get('first_date'));
+        $endDate                       = '' !== (string)$request->get('end_date') ? Carbon::createFromFormat('Y-m-d', $request->get('end_date')) : null;
+        $endsAt                        = (string)$request->get('ends');
+        $repetitionType                = explode(',', $request->get('type'))[0];
+        $repetitions                   = (int)$request->get('reps');
+        $weekend                       = (int)$request->get('weekend');
+        $repetitionMoment              = '';
+        $skip                          = (int)$request->get('skip');
+        $skip                          = $skip < 0 || $skip > 31 ? 0 : $skip;
+        $weekend                       = $weekend < 1 || $weekend > 4 ? 1 : $weekend;
+
+        if (null === $start || null === $end || null === $firstDate || null === $endDate) {
+            return response()->json();
+        }
+
         $start->startOfDay();
 
         // if $firstDate is beyond $end, simply return an empty array.
@@ -88,7 +92,7 @@ class RecurrenceController extends Controller
             return response()->json();
         }
         // if $firstDate is beyond start, use that one:
-        $actualStart = clone $firstDate;
+        $actualStart                   = clone $firstDate;
 
         if ('weekly' === $repetitionType || 'monthly' === $repetitionType) {
             $repetitionMoment = explode(',', $request->get('type'))[1] ?? '1';
@@ -103,12 +107,12 @@ class RecurrenceController extends Controller
         $repetition                    = new RecurrenceRepetition();
         $repetition->repetition_type   = $repetitionType;
         $repetition->repetition_moment = $repetitionMoment;
-        $repetition->repetition_skip   = (int)$request->get('skip');
-        $repetition->weekend           = (int)$request->get('weekend');
+        $repetition->repetition_skip   = $skip;
+        $repetition->weekend           = $weekend;
         $actualEnd                     = clone $end;
 
         if ('until_date' === $endsAt) {
-            $actualEnd   = $endDate ?? clone $end;
+            $actualEnd   = $endDate;
             $occurrences = $this->recurring->getOccurrencesInRange($repetition, $actualStart, $actualEnd);
         }
         if ('times' === $endsAt) {
@@ -140,28 +144,30 @@ class RecurrenceController extends Controller
 
     /**
      * Suggests repetition moments.
-     *
-     * @param  Request  $request
-     *
-     * @return JsonResponse
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function suggest(Request $request): JsonResponse
     {
-        $string      = $request->get('date') ?? date('Y-m-d');
-        $today       = Carbon::now()->startOfDay();
-        $date        = Carbon::createFromFormat('Y-m-d', $string)->startOfDay();
+        $string      = '' === (string)$request->get('date') ? date('Y-m-d') : (string)$request->get('date');
+        $today       = today(config('app.timezone'))->startOfDay();
+
+        try {
+            $date = Carbon::createFromFormat('Y-m-d', $string, config('app.timezone'));
+        } catch (InvalidFormatException $e) {
+            $date = Carbon::today(config('app.timezone'));
+        }
+        if (null === $date) {
+            return response()->json();
+        }
+        $date->startOfDay();
         $preSelected = (string)$request->get('pre_select');
         $locale      = app('steam')->getLocale();
 
-        Log::debug(sprintf('date = %s, today = %s. date > today? %s', $date->toAtomString(), $today->toAtomString(), var_export($date > $today, true)));
-        Log::debug(sprintf('past = true? %s', var_export('true' === (string)$request->get('past'), true)));
+        app('log')->debug(sprintf('date = %s, today = %s. date > today? %s', $date->toAtomString(), $today->toAtomString(), var_export($date > $today, true)));
+        app('log')->debug(sprintf('past = true? %s', var_export('true' === (string)$request->get('past'), true)));
 
-        $result = [];
+        $result      = [];
         if ($date > $today || 'true' === (string)$request->get('past')) {
-            Log::debug('Will fill dropdown.');
+            app('log')->debug('Will fill dropdown.');
             $weekly     = sprintf('weekly,%s', $date->dayOfWeekIso);
             $monthly    = sprintf('monthly,%s', $date->day);
             $dayOfWeek  = (string)trans(sprintf('config.dow_%s', $date->dayOfWeekIso));
@@ -188,7 +194,7 @@ class RecurrenceController extends Controller
                 ],
             ];
         }
-        Log::debug('Dropdown is', $result);
+        app('log')->debug('Dropdown is', $result);
 
         return response()->json($result);
     }

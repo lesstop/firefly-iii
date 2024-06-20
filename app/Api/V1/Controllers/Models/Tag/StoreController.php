@@ -40,8 +40,6 @@ class StoreController extends Controller
 
     /**
      * TagController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -49,7 +47,7 @@ class StoreController extends Controller
         $this->middleware(
             function ($request, $next) {
                 /** @var User $user */
-                $user = auth()->user();
+                $user             = auth()->user();
 
                 $this->repository = app(TagRepositoryInterface::class);
                 $this->repository->setUser($user);
@@ -61,23 +59,20 @@ class StoreController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/tags/storeTag
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/tags/storeTag
      *
      * Store new object.
-     *
-     * @param  StoreRequest  $request
-     *
-     * @return JsonResponse
      */
     public function store(StoreRequest $request): JsonResponse
     {
-        $rule    = $this->repository->store($request->getAll());
-        $manager = $this->getManager();
+        $rule        = $this->repository->store($request->getAll());
+        $manager     = $this->getManager();
+
         /** @var TagTransformer $transformer */
         $transformer = app(TagTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($rule, $transformer, 'tags');
+        $resource    = new Item($rule, $transformer, 'tags');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

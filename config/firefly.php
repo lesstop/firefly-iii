@@ -31,6 +31,7 @@ use FireflyIII\Models\Bill;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\Category;
+use FireflyIII\Models\InvitedUser;
 use FireflyIII\Models\LinkType;
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Models\PiggyBank;
@@ -45,6 +46,7 @@ use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionJournalLink;
 use FireflyIII\Models\TransactionType as TransactionTypeModel;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\Models\Webhook;
 use FireflyIII\Models\WebhookAttempt;
 use FireflyIII\Models\WebhookMessage;
@@ -59,6 +61,9 @@ use FireflyIII\Support\Binder\EitherConfigKey;
 use FireflyIII\Support\Binder\JournalList;
 use FireflyIII\Support\Binder\TagList;
 use FireflyIII\Support\Binder\TagOrId;
+use FireflyIII\Support\Binder\UserGroupAccount;
+use FireflyIII\Support\Binder\UserGroupBill;
+use FireflyIII\Support\Binder\UserGroupTransaction;
 use FireflyIII\TransactionRules\Actions\AddTag;
 use FireflyIII\TransactionRules\Actions\AppendDescription;
 use FireflyIII\TransactionRules\Actions\AppendDescriptionToNotes;
@@ -78,12 +83,16 @@ use FireflyIII\TransactionRules\Actions\PrependDescription;
 use FireflyIII\TransactionRules\Actions\PrependNotes;
 use FireflyIII\TransactionRules\Actions\RemoveAllTags;
 use FireflyIII\TransactionRules\Actions\RemoveTag;
+use FireflyIII\TransactionRules\Actions\SetAmount;
 use FireflyIII\TransactionRules\Actions\SetBudget;
 use FireflyIII\TransactionRules\Actions\SetCategory;
 use FireflyIII\TransactionRules\Actions\SetDescription;
 use FireflyIII\TransactionRules\Actions\SetDestinationAccount;
+use FireflyIII\TransactionRules\Actions\SetDestinationToCashAccount;
 use FireflyIII\TransactionRules\Actions\SetNotes;
 use FireflyIII\TransactionRules\Actions\SetSourceAccount;
+use FireflyIII\TransactionRules\Actions\SetSourceToCashAccount;
+use FireflyIII\TransactionRules\Actions\SwitchAccounts;
 use FireflyIII\TransactionRules\Actions\UpdatePiggybank;
 use FireflyIII\User;
 
@@ -101,14 +110,16 @@ return [
     ],
     // some feature flags:
     'feature_flags'                => [
-        'export'       => true,
-        'telemetry'    => false,
-        'webhooks'     => true,
-        'handle_debts' => true,
+        'export'            => true,
+        'telemetry'         => false,
+        'webhooks'          => true,
+        'handle_debts'      => true,
+        'expression_engine' => false,
+        // see cer.php for exchange rates feature flag.
     ],
-    'version'                      => '5.8.0-alpha.1',
-    'api_version'                  => '2.0.0-alpha.1',
-    'db_version'                   => 19,
+    'version'                      => '6.1.18',
+    'api_version'                  => '2.1.0',
+    'db_version'                   => 24,
 
     // generic settings
     'maxUploadSize'                => 1073741824, // 1 GB
@@ -117,7 +128,6 @@ return [
 
     // tokens and keys
     'fixer_api_key'                => env('FIXER_API_KEY', ''),
-    'mapbox_api_key'               => env('MAPBOX_API_KEY', ''),
     'ipinfo_token'                 => env('IPINFO_TOKEN', ''),
     'static_cron_token'            => envNonEmpty('STATIC_CRON_TOKEN'),
 
@@ -127,9 +137,7 @@ return [
     'disable_csp_header'           => env('DISABLE_CSP_HEADER', false),
     'allow_webhooks'               => env('ALLOW_WEBHOOKS', false),
 
-    // email flags
-    'send_registration_mail'       => env('SEND_REGISTRATION_MAIL', true),
-    'warn_new_ip'                  => env('SEND_LOGIN_NEW_IP_WARNING', true),
+    // flags
     'send_report_journals'         => envNonEmpty('SEND_REPORT_JOURNALS', true),
 
     // info for demo site
@@ -139,7 +147,6 @@ return [
     'tracker_url'                  => env('TRACKER_URL', ''),
 
     // authentication settings
-    'login_provider'               => envNonEmpty('LOGIN_PROVIDER', 'eloquent'),
     'authentication_guard'         => envNonEmpty('AUTHENTICATION_GUARD', 'web'),
     'custom_logout_url'            => envNonEmpty('CUSTOM_LOGOUT_URL', ''),
 
@@ -148,14 +155,13 @@ return [
     'update_minimum_age'           => 7,
 
     // notifications
-    'available_notifications'      => ['bill_reminder', 'new_access_token', 'transaction_creation', 'user_login'],
+    'available_notifications'      => ['bill_reminder', 'new_access_token', 'transaction_creation', 'user_login', 'rule_action_failures'],
     'admin_notifications'          => ['admin_new_reg', 'user_new_reg', 'new_version', 'invite_created', 'invite_redeemed'],
 
     // enabled languages
     'languages'                    => [
         // currently enabled languages
         'bg_BG' => ['name_locale' => 'Български', 'name_english' => 'Bulgarian'],
-        //        'ca_ES' => ['name_locale' => 'Catalan', 'name_english' => 'Catalan'],
         'cs_CZ' => ['name_locale' => 'Czech', 'name_english' => 'Czech'],
         'da_DK' => ['name_locale' => 'Danish', 'name_english' => 'Danish'],
         'de_DE' => ['name_locale' => 'Deutsch', 'name_english' => 'German'],
@@ -163,6 +169,7 @@ return [
         'en_GB' => ['name_locale' => 'English (GB)', 'name_english' => 'English (GB)'],
         'en_US' => ['name_locale' => 'English (US)', 'name_english' => 'English (US)'],
         'es_ES' => ['name_locale' => 'Español', 'name_english' => 'Spanish'],
+        'ca_ES' => ['name_locale' => 'Català (Espanya)', 'name_english' => 'Catalan (Spain)'],
         //        'et_EE' => ['name_locale' => 'Estonian', 'name_english' => 'Estonian'],
         //        'fa_IR' => ['name_locale' => 'فارسی', 'name_english' => 'Persian'],
         'fi_FI' => ['name_locale' => 'Suomi', 'name_english' => 'Finnish'],
@@ -173,8 +180,11 @@ return [
         //        'is_IS' => ['name_locale' => 'Icelandic', 'name_english' => 'Icelandic'],
         'it_IT' => ['name_locale' => 'Italiano', 'name_english' => 'Italian'],
         'ja_JP' => ['name_locale' => 'Japanese', 'name_english' => 'Japanese'],
+        'ko_KR' => ['name_locale' => 'Korean', 'name_english' => 'Korean'],
         //        'lt_LT' => ['name_locale' => 'Lietuvių', 'name_english' => 'Lithuanian'],
-        'nb_NO' => ['name_locale' => 'Norsk', 'name_english' => 'Norwegian'],
+
+        'nb_NO' => ['name_locale' => 'Norsk Bokmål', 'name_english' => 'Norwegian Bokmål'],
+        'nn_NO' => ['name_locale' => 'Norsk Nynorsk', 'name_english' => 'Norwegian Nynorsk'],
         'nl_NL' => ['name_locale' => 'Nederlands', 'name_english' => 'Dutch'],
         'pl_PL' => ['name_locale' => 'Polski', 'name_english' => 'Polish'],
         'pt_BR' => ['name_locale' => 'Português do Brasil', 'name_english' => 'Portuguese (Brazil)'],
@@ -184,7 +194,7 @@ return [
         //        'si_LK' => ['name_locale' => 'සිංහල', 'name_english' => 'Sinhala (Sri Lanka)'],
         'sk_SK' => ['name_locale' => 'Slovenčina', 'name_english' => 'Slovak'],
         'sl_SI' => ['name_locale' => 'Slovenian', 'name_english' => 'Slovenian'],
-        ////        'sr_CS' => ['name_locale' => 'Serbian (Latin)', 'name_english' => 'Serbian (Latin)'],
+        // //        'sr_CS' => ['name_locale' => 'Serbian (Latin)', 'name_english' => 'Serbian (Latin)'],
         'sv_SE' => ['name_locale' => 'Svenska', 'name_english' => 'Swedish'],
         //        // 'tlh_AA' => ['name_locale' => 'tlhIngan Hol', 'name_english' => 'Klingon'],
         'tr_TR' => ['name_locale' => 'Türkçe', 'name_english' => 'Turkish'],
@@ -196,7 +206,6 @@ return [
 
     // web configuration:
     'trusted_proxies'              => env('TRUSTED_PROXIES', ''),
-    'layout'                       => envNonEmpty('FIREFLY_III_LAYOUT', 'v1'),
 
     // map configuration
     'default_location'             => [
@@ -205,10 +214,14 @@ return [
         'zoom_level' => env('MAP_DEFAULT_ZOOM', '6'),
     ],
 
+    // administration specific preferences
+    'admin_specific_prefs'         => ['frontpageAccounts', 'lastActivity'],
+
     // default user-related values
+    'darkMode'                     => 'browser',
     'list_length'                  => 10, // to be removed if v1 is cancelled.
     'default_preferences'          => [
-        'frontPageAccounts'  => [],
+        'frontpageAccounts'  => [],
         'listPageSize'       => 50,
         'currencyPreference' => 'EUR',
         'language'           => 'en_US',
@@ -242,41 +255,43 @@ return [
         TransactionJournal::class,
         Recurrence::class,
     ],
+    'available_dark_modes'         => ['light', 'dark', 'browser'],
     'bill_reminder_periods'        => [90, 30, 14, 7, 0],
-    'valid_view_ranges'            => ['1D', '1W', '1M', '3M', '6M', '1Y',],
+    'valid_view_ranges'            => ['1D', '1W', '1M', '3M', '6M', '1Y'],
+    'valid_url_protocols'          => envNonEmpty('VALID_URL_PROTOCOLS', 'http,https,ftp,ftps,mailto'),
     'allowedMimes'                 => [
-        /* plain files */
+        // plain files
         'text/plain',
 
-        /* images */
+        // images
         'image/jpeg',
         'image/svg+xml',
         'image/png',
         'image/heic',
         'image/heic-sequence',
 
-        /* PDF */
+        // PDF
         'application/pdf',
 
-        /* Generic upload */
+        // Generic upload
         'application/octet-stream',
 
-        /* MS word */
+        // MS word
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
-        /* MS excel */
+        // MS excel
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
-        /* MS powerpoint */
+        // MS powerpoint
         'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'application/vnd.openxmlformats-officedocument.presentationml.template',
         'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
-        /* iWork */
+        // iWork
         'application/x-iwork-pages-sffpages',
-        /* open office */
+        // open office
         'application/vnd.sun.xml.writer',
         'application/vnd.sun.xml.writer.template',
         'application/vnd.sun.xml.writer.global',
@@ -308,15 +323,15 @@ return [
         'application/vnd.oasis.opendocument.database',
         'application/vnd.oasis.opendocument.image',
 
-        /* EML */
+        // EML
         'message/rfc822',
 
-        /* JSON */
+        // JSON
         'application/json',
     ],
     'accountRoles'                 => ['defaultAsset', 'sharedAsset', 'savingAsset', 'ccAsset', 'cashWalletAsset'],
     'valid_liabilities'            => [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE],
-    'ccTypes'                      => ['monthlyFull' => 'Full payment every month',],
+    'ccTypes'                      => ['monthlyFull' => 'Full payment every month'],
     'credit_card_types'            => ['monthlyFull'],
 
     // "period must be in this list" values
@@ -421,59 +436,65 @@ return [
         'transfers'  => 'fa-exchange',
     ],
 
-    'bindables'            => [
+    'bindables'                    => [
         // models
-        'account'          => Account::class,
-        'attachment'       => Attachment::class,
-        'availableBudget'  => AvailableBudget::class,
-        'bill'             => Bill::class,
-        'budget'           => Budget::class,
-        'budgetLimit'      => BudgetLimit::class,
-        'category'         => Category::class,
-        'linkType'         => LinkType::class,
-        'transactionType'  => TransactionTypeModel::class,
-        'journalLink'      => TransactionJournalLink::class,
-        'currency'         => TransactionCurrency::class,
-        'objectGroup'      => ObjectGroup::class,
-        'piggyBank'        => PiggyBank::class,
-        'preference'       => Preference::class,
-        'tj'               => TransactionJournal::class,
-        'tag'              => Tag::class,
-        'recurrence'       => Recurrence::class,
-        'rule'             => Rule::class,
-        'ruleGroup'        => RuleGroup::class,
-        'transactionGroup' => TransactionGroup::class,
-        'user'             => User::class,
-        'webhook'          => Webhook::class,
-        'webhookMessage'   => WebhookMessage::class,
-        'webhookAttempt'   => WebhookAttempt::class,
+        'account'              => Account::class,
+        'attachment'           => Attachment::class,
+        'availableBudget'      => AvailableBudget::class,
+        'bill'                 => Bill::class,
+        'budget'               => Budget::class,
+        'budgetLimit'          => BudgetLimit::class,
+        'category'             => Category::class,
+        'linkType'             => LinkType::class,
+        'transactionType'      => TransactionTypeModel::class,
+        'journalLink'          => TransactionJournalLink::class,
+        'currency'             => TransactionCurrency::class,
+        'objectGroup'          => ObjectGroup::class,
+        'piggyBank'            => PiggyBank::class,
+        'preference'           => Preference::class,
+        'tj'                   => TransactionJournal::class,
+        'tag'                  => Tag::class,
+        'recurrence'           => Recurrence::class,
+        'rule'                 => Rule::class,
+        'ruleGroup'            => RuleGroup::class,
+        'transactionGroup'     => TransactionGroup::class,
+        'user'                 => User::class,
+        'webhook'              => Webhook::class,
+        'webhookMessage'       => WebhookMessage::class,
+        'webhookAttempt'       => WebhookAttempt::class,
+        'invitedUser'          => InvitedUser::class,
 
         // strings
-        'currency_code'    => CurrencyCode::class,
+        'currency_code'        => CurrencyCode::class,
 
         // dates
-        'start_date'       => Date::class,
-        'end_date'         => Date::class,
-        'date'             => Date::class,
+        'start_date'           => Date::class,
+        'end_date'             => Date::class,
+        'date'                 => Date::class,
 
         // lists
-        'accountList'      => AccountList::class,
-        'doubleList'       => AccountList::class,
-        'budgetList'       => BudgetList::class,
-        'journalList'      => JournalList::class,
-        'categoryList'     => CategoryList::class,
-        'tagList'          => TagList::class,
+        'accountList'          => AccountList::class,
+        'doubleList'           => AccountList::class,
+        'budgetList'           => BudgetList::class,
+        'journalList'          => JournalList::class,
+        'categoryList'         => CategoryList::class,
+        'tagList'              => TagList::class,
 
         // others
-        'fromCurrencyCode' => CurrencyCode::class,
-        'toCurrencyCode'   => CurrencyCode::class,
-        'cliToken'         => CLIToken::class,
-        'tagOrId'          => TagOrId::class,
-        'dynamicConfigKey' => DynamicConfigKey::class,
-        'eitherConfigKey'  => EitherConfigKey::class,
+        'fromCurrencyCode'     => CurrencyCode::class,
+        'toCurrencyCode'       => CurrencyCode::class,
+        'cliToken'             => CLIToken::class,
+        'tagOrId'              => TagOrId::class,
+        'dynamicConfigKey'     => DynamicConfigKey::class,
+        'eitherConfigKey'      => EitherConfigKey::class,
 
+        // V2 API endpoints:
+        'userGroupAccount'     => UserGroupAccount::class,
+        'userGroupTransaction' => UserGroupTransaction::class,
+        'userGroupBill'        => UserGroupBill::class,
+        'userGroup'            => UserGroup::class,
     ],
-    'rule-actions'         => [
+    'rule-actions'                 => [
         'set_category'            => SetCategory::class,
         'clear_category'          => ClearCategory::class,
         'set_budget'              => SetBudget::class,
@@ -494,14 +515,20 @@ return [
         'convert_withdrawal'      => ConvertToWithdrawal::class,
         'convert_deposit'         => ConvertToDeposit::class,
         'convert_transfer'        => ConvertToTransfer::class,
+        'switch_accounts'         => SwitchAccounts::class,
         'update_piggy'            => UpdatePiggybank::class,
         'delete_transaction'      => DeleteTransaction::class,
         'append_descr_to_notes'   => AppendDescriptionToNotes::class,
         'append_notes_to_descr'   => AppendNotesToDescription::class,
         'move_descr_to_notes'     => MoveDescriptionToNotes::class,
         'move_notes_to_descr'     => MoveNotesToDescription::class,
+        'set_source_to_cash'      => SetSourceToCashAccount::class,
+        'set_destination_to_cash' => SetDestinationToCashAccount::class,
+        'set_amount'              => SetAmount::class,
+        // 'set_foreign_amount' => SetForeignAmount::class,
+        // 'set_foreign_currency' => SetForeignCurrency::class,
     ],
-    'context-rule-actions' => [
+    'context-rule-actions'         => [
         'set_category',
         'set_budget',
         'add_tag',
@@ -520,17 +547,16 @@ return [
         'convert_transfer',
     ],
 
-    'test-triggers'             => [
+    'test-triggers'                => [
         'limit' => 10,
         'range' => 200,
     ],
 
-
     // expected source types for each transaction type, in order of preference.
-    'expected_source_types'     => [
+    'expected_source_types'        => [
         'source'      => [
             TransactionTypeModel::WITHDRAWAL       => [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
-            TransactionTypeEnum::DEPOSIT->value    => [AccountType::REVENUE, AccountType::CASH, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
+            TransactionTypeEnum::DEPOSIT->value    => [AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE, AccountType::REVENUE, AccountType::CASH],
             TransactionTypeModel::TRANSFER         => [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
             TransactionTypeModel::OPENING_BALANCE  => [
                 AccountType::INITIAL_BALANCE,
@@ -553,11 +579,11 @@ return [
         ],
         'destination' => [
             TransactionTypeModel::WITHDRAWAL       => [
-                AccountType::EXPENSE,
-                AccountType::CASH,
                 AccountType::LOAN,
                 AccountType::DEBT,
                 AccountType::MORTGAGE,
+                AccountType::EXPENSE,
+                AccountType::CASH,
             ],
             TransactionTypeEnum::DEPOSIT->value    => [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
             TransactionTypeModel::TRANSFER         => [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
@@ -572,7 +598,7 @@ return [
             TransactionTypeModel::LIABILITY_CREDIT => [AccountType::LIABILITY_CREDIT, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
         ],
     ],
-    'allowed_opposing_types'    => [
+    'allowed_opposing_types'       => [
         'source'      => [
             AccountType::ASSET            => [
                 AccountType::ASSET,
@@ -617,7 +643,6 @@ return [
             AccountType::RECONCILIATION   => [AccountType::ASSET],
             AccountType::REVENUE          => [AccountType::ASSET, AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE],
             AccountType::LIABILITY_CREDIT => [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE],
-
         ],
         'destination' => [
             AccountType::ASSET            => [
@@ -659,11 +684,11 @@ return [
             ],
             AccountType::RECONCILIATION   => [AccountType::ASSET],
             AccountType::REVENUE          => [], // is not allowed as a destination
-            AccountType::LIABILITY_CREDIT => [],// is not allowed as a destination
+            AccountType::LIABILITY_CREDIT => [], // is not allowed as a destination
         ],
     ],
     // depending on the account type, return the allowed transaction types:
-    'allowed_transaction_types' => [
+    'allowed_transaction_types'    => [
         'source'      => [
             AccountType::ASSET            => [
                 TransactionTypeModel::WITHDRAWAL,
@@ -729,11 +754,10 @@ return [
             AccountType::RECONCILIATION   => [TransactionTypeModel::RECONCILIATION],
             AccountType::LIABILITY_CREDIT => [], // is not allowed as a destination
         ],
-
     ],
 
     // having the source + dest will tell you the transaction type.
-    'account_to_transaction'    => [
+    'account_to_transaction'       => [
         AccountType::ASSET            => [
             AccountType::ASSET           => TransactionTypeModel::TRANSFER,
             AccountType::CASH            => TransactionTypeModel::WITHDRAWAL,
@@ -798,7 +822,7 @@ return [
     ],
 
     // allowed source -> destination accounts.
-    'source_dests'              => [
+    'source_dests'                 => [
         TransactionTypeModel::WITHDRAWAL       => [
             AccountType::ASSET    => [AccountType::EXPENSE, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE, AccountType::CASH],
             AccountType::LOAN     => [AccountType::EXPENSE, AccountType::CASH],
@@ -837,7 +861,7 @@ return [
         ],
     ],
     // if you add fields to this array, don't forget to update the export routine (ExportDataGenerator).
-    'journal_meta_fields'       => [
+    'journal_meta_fields'          => [
         // sepa
         'sepa_cc',
         'sepa_ct_op',
@@ -871,15 +895,56 @@ return [
         'recurrence_count',
         'recurrence_date',
     ],
-    'webhooks'                  => [
+    'webhooks'                     => [
         'max_attempts' => env('WEBHOOK_MAX_ATTEMPTS', 3),
     ],
-    'can_have_virtual_amounts'  => [AccountType::ASSET],
-    'can_have_opening_balance'  => [AccountType::ASSET],
-    'valid_asset_fields'        => ['account_role', 'account_number', 'currency_id', 'BIC', 'include_net_worth'],
-    'valid_cc_fields'           => ['account_role', 'cc_monthly_payment_date', 'cc_type', 'account_number', 'currency_id', 'BIC', 'include_net_worth'],
-    'valid_account_fields'      => ['account_number', 'currency_id', 'BIC', 'interest', 'interest_period', 'include_net_worth', 'liability_direction'],
+    'can_have_virtual_amounts'     => [AccountType::ASSET],
+    'can_have_opening_balance'     => [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE],
+    'dynamic_creation_allowed'     => [
+        AccountType::EXPENSE,
+        AccountType::REVENUE,
+        AccountType::INITIAL_BALANCE,
+        AccountType::RECONCILIATION,
+        AccountType::LIABILITY_CREDIT,
+    ],
+    'valid_asset_fields'           => ['account_role', 'account_number', 'currency_id', 'BIC', 'include_net_worth'],
+    'valid_cc_fields'              => ['account_role', 'cc_monthly_payment_date', 'cc_type', 'account_number', 'currency_id', 'BIC', 'include_net_worth'],
+    'valid_account_fields'         => ['account_number', 'currency_id', 'BIC', 'interest', 'interest_period', 'include_net_worth', 'liability_direction'],
+
+    // dynamic date ranges are as follows:
+    'dynamic_date_ranges'          => ['last7', 'last30', 'last90', 'last365', 'MTD', 'QTD', 'YTD'],
 
     // only used in v1
-    'allowed_sort_parameters'   => ['order', 'name', 'iban'],
+    'allowed_sort_parameters'      => ['order', 'name', 'iban'],
+
+    // preselected account lists possibilities:
+    'preselected_accounts'         => ['all', 'assets', 'liabilities'],
+
+    // allowed filters (search) for APIs
+    'filters'                      => [
+        'allowed' => [
+            'accounts' => [
+                'name'               => 'string',
+                'active'             => 'boolean',
+                'iban'               => 'iban',
+                'balance'            => 'numeric',
+                'last_activity'      => 'date',
+                'balance_difference' => 'numeric',
+            ],
+        ],
+    ],
+
+    // allowed sort columns for APIs
+    'sorting'                      => [
+        'allowed' => [
+            'transactions' => ['description', 'amount'],
+            'accounts'     => ['name', 'active', 'iban', 'balance', 'last_activity', 'balance_difference', 'current_debt'],
+        ],
+    ],
+    'full_data_set'                => [
+        'account' => ['last_activity', 'balance_difference', 'current_balance', 'current_debt'],
+    ],
+    'valid_query_filters'          => [
+        'account' => ['name', 'iban', 'active'],
+    ],
 ];

@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 
 /**
@@ -34,32 +35,43 @@ class ChangesForV479 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
-        Schema::table(
-            'transaction_currencies',
-            static function (Blueprint $table) {
-                $table->dropColumn(['enabled']);
+        if (Schema::hasColumn('transaction_currencies', 'enabled')) {
+            try {
+                Schema::table(
+                    'transaction_currencies',
+                    static function (Blueprint $table): void {
+                        $table->dropColumn(['enabled']);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 
     /**
      * Run the migrations.
-     * @SuppressWarnings(PHPMD.ShortMethodName)
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
-    public function up()
+    public function up(): void
     {
-        Schema::table(
-            'transaction_currencies',
-            static function (Blueprint $table) {
-                $table->boolean('enabled')->default(0)->after('deleted_at');
+        if (!Schema::hasColumn('transaction_currencies', 'enabled')) {
+            try {
+                Schema::table(
+                    'transaction_currencies',
+                    static function (Blueprint $table): void {
+                        $table->boolean('enabled')->default(0)->after('deleted_at');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not execute query: %s', $e->getMessage()));
+                app('log')->error('If the column or index already exists (see error), this is not an problem. Otherwise, please open a GitHub discussion.');
             }
-        );
+        }
     }
 }

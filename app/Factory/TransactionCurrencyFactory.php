@@ -26,7 +26,6 @@ namespace FireflyIII\Factory;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
 use Illuminate\Database\QueryException;
-use Log;
 
 /**
  * Class TransactionCurrencyFactory
@@ -34,16 +33,17 @@ use Log;
 class TransactionCurrencyFactory
 {
     /**
-     * @param  array  $data
-     *
-     * @return TransactionCurrency
      * @throws FireflyException
      */
     public function create(array $data): TransactionCurrency
     {
+        $data['code']           = e($data['code']);
+        $data['symbol']         = e($data['symbol']);
+        $data['name']           = e($data['name']);
+        $data['decimal_places'] = (int)$data['decimal_places'];
         // if the code already exists (deleted)
         // force delete it and then create the transaction:
-        $count = TransactionCurrency::withTrashed()->whereCode($data['code'])->count();
+        $count                  = TransactionCurrency::withTrashed()->whereCode($data['code'])->count();
         if (1 === $count) {
             $old = TransactionCurrency::withTrashed()->whereCode($data['code'])->first();
             $old->forceDelete();
@@ -58,31 +58,27 @@ class TransactionCurrencyFactory
                     'code'           => $data['code'],
                     'symbol'         => $data['symbol'],
                     'decimal_places' => $data['decimal_places'],
-                    'enabled'        => $data['enabled'],
+                    'enabled'        => false,
                 ]
             );
         } catch (QueryException $e) {
             $result = null;
-            Log::error(sprintf('Could not create new currency: %s', $e->getMessage()));
+            app('log')->error(sprintf('Could not create new currency: %s', $e->getMessage()));
+            app('log')->error($e->getTraceAsString());
+
             throw new FireflyException('400004: Could not store new currency.', 0, $e);
         }
 
         return $result;
     }
 
-    /**
-     * @param  int|null  $currencyId
-     * @param  null|string  $currencyCode
-     *
-     * @return TransactionCurrency|null
-     */
     public function find(?int $currencyId, ?string $currencyCode): ?TransactionCurrency
     {
-        $currencyCode = (string)$currencyCode;
+        $currencyCode = e($currencyCode);
         $currencyId   = (int)$currencyId;
 
         if ('' === $currencyCode && 0 === $currencyId) {
-            Log::debug('Cannot find anything on empty currency code and empty currency ID!');
+            app('log')->debug('Cannot find anything on empty currency code and empty currency ID!');
 
             return null;
         }

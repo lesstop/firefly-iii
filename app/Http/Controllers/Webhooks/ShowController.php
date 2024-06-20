@@ -25,10 +25,11 @@ namespace FireflyIII\Http\Controllers\Webhooks;
 
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Webhook;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Routing\Redirector;
-use Illuminate\View\View;
+use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class ShowController
@@ -37,8 +38,6 @@ class ShowController extends Controller
 {
     /**
      * DeleteController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -46,7 +45,7 @@ class ShowController extends Controller
 
         // translations:
         $this->middleware(
-            function ($request, $next) {
+            static function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-bolt');
                 app('view')->share('subTitleIcon', 'fa-bolt');
                 app('view')->share('title', (string)trans('firefly.webhooks'));
@@ -59,12 +58,16 @@ class ShowController extends Controller
     /**
      * Delete account screen.
      *
-     * @param  Webhook  $webhook
-     *
-     * @return Factory|RedirectResponse|Redirector|View
+     * @return Application|Factory|View
      */
     public function index(Webhook $webhook)
     {
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User visits webhook #%d page, but webhooks are DISABLED.', $webhook->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+        Log::channel('audit')->info(sprintf('User visits webhook #%d page.', $webhook->id));
         $subTitle = (string)trans('firefly.show_webhook', ['title' => $webhook->title]);
 
         return view('webhooks.show', compact('webhook', 'subTitle'));

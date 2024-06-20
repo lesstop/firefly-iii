@@ -34,10 +34,7 @@ class ObjectGroupTransformer extends AbstractTransformer
     protected ObjectGroupRepositoryInterface $repository;
 
     /**
-     *
      * AccountTransformer constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -46,10 +43,6 @@ class ObjectGroupTransformer extends AbstractTransformer
 
     /**
      * Transform the account.
-     *
-     * @param  ObjectGroup  $objectGroup
-     *
-     * @return array
      */
     public function transform(ObjectGroup $objectGroup): array
     {
@@ -60,7 +53,7 @@ class ObjectGroupTransformer extends AbstractTransformer
             'created_at' => $objectGroup->created_at?->toAtomString(),
             'updated_at' => $objectGroup->updated_at?->toAtomString(),
             'title'      => $objectGroup->title,
-            'order'      => (int)$objectGroup->order,
+            'order'      => $objectGroup->order,
             'links'      => [
                 [
                     'rel' => 'self',

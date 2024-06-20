@@ -29,7 +29,6 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\LinkType;
 use FireflyIII\Repositories\LinkType\LinkTypeRepositoryInterface;
-use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
@@ -49,8 +48,6 @@ class ListController extends Controller
 
     /**
      * LinkTypeController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -58,8 +55,8 @@ class ListController extends Controller
         $this->middleware(
             function ($request, $next) {
                 /** @var User $user */
-                $user                 = auth()->user();
-                $this->repository     = app(LinkTypeRepositoryInterface::class);
+                $user             = auth()->user();
+                $this->repository = app(LinkTypeRepositoryInterface::class);
                 $this->repository->setUser($user);
 
                 return $next($request);
@@ -69,33 +66,28 @@ class ListController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/links/listTransactionByLinkType
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/links/listTransactionByLinkType
      *
-     * @param  Request  $request
-     * @param  LinkType  $linkType
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function transactions(Request $request, LinkType $linkType): JsonResponse
     {
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
-        $type     = $request->get('type') ?? 'default';
+        $pageSize     = $this->parameters->get('limit');
+        $type         = $request->get('type') ?? 'default';
         $this->parameters->set('type', $type);
 
-        $types   = $this->mapTransactionTypes($this->parameters->get('type'));
-        $manager = $this->getManager();
+        $types        = $this->mapTransactionTypes($this->parameters->get('type'));
+        $manager      = $this->getManager();
 
         // whatever is returned by the query, it must be part of these journals:
-        $journalIds = $this->repository->getJournalIds($linkType);
+        $journalIds   = $this->repository->getJournalIds($linkType);
 
         /** @var User $admin */
-        $admin = auth()->user();
+        $admin        = auth()->user();
 
         // use new group collector:
         /** @var GroupCollectorInterface $collector */
-        $collector = app(GroupCollectorInterface::class);
+        $collector    = app(GroupCollectorInterface::class);
         $collector
             ->setUser($admin)
             // filter on journal IDs.
@@ -107,19 +99,23 @@ class ListController extends Controller
             // set page to retrieve
             ->setPage($this->parameters->get('page'))
             // set types of transactions to return.
-            ->setTypes($types);
-        if (null !== $this->parameters->get('start') && null !== $this->parameters->get('end')) {
-            $collector->setRange($this->parameters->get('start'), $this->parameters->get('end'));
+            ->setTypes($types)
+        ;
+        if (null !== $this->parameters->get('start')) {
+            $collector->setStart($this->parameters->get('start'));
         }
-        $paginator = $collector->getPaginatedGroups();
+        if (null !== $this->parameters->get('end')) {
+            $collector->setEnd($this->parameters->get('end'));
+        }
+        $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.transactions.index').$this->buildParams());
         $transactions = $paginator->getCollection();
 
         /** @var TransactionGroupTransformer $transformer */
-        $transformer = app(TransactionGroupTransformer::class);
+        $transformer  = app(TransactionGroupTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($transactions, $transformer, 'transactions');
+        $resource     = new FractalCollection($transactions, $transformer, 'transactions');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);

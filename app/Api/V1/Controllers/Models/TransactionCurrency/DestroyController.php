@@ -27,7 +27,8 @@ namespace FireflyIII\Api\V1\Controllers\Models\TransactionCurrency;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\User\UserRepositoryInterface;
+use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
@@ -37,18 +38,18 @@ use Illuminate\Http\JsonResponse;
 class DestroyController extends Controller
 {
     private CurrencyRepositoryInterface $repository;
+    private UserRepositoryInterface     $userRepository;
 
     /**
      * CurrencyRepository constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
         parent::__construct();
         $this->middleware(
             function ($request, $next) {
-                $this->repository = app(CurrencyRepositoryInterface::class);
+                $this->repository     = app(CurrencyRepositoryInterface::class);
+                $this->userRepository = app(UserRepositoryInterface::class);
                 $this->repository->setUser(auth()->user());
 
                 return $next($request);
@@ -58,30 +59,30 @@ class DestroyController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/currencies/deleteCurrency
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/deleteCurrency
      *
      * Remove the specified resource from storage.
      *
-     * @param  TransactionCurrency  $currency
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function destroy(TransactionCurrency $currency): JsonResponse
     {
         /** @var User $admin */
         $admin = auth()->user();
+        $rules = ['currency_code' => 'required'];
 
         if (!$this->userRepository->hasRole($admin, 'owner')) {
             // access denied:
-            throw new FireflyException('200005: You need the "owner" role to do this.');
+            $messages = ['currency_code' => '200005: You need the "owner" role to do this.'];
+            \Validator::make([], $rules, $messages)->validate();
         }
         if ($this->repository->currencyInUse($currency)) {
-            throw new FireflyException('200006: Currency in use.');
+            $messages = ['currency_code' => '200006: Currency in use.'];
+            \Validator::make([], $rules, $messages)->validate();
         }
         if ($this->repository->isFallbackCurrency($currency)) {
-            throw new FireflyException('200026: Currency is fallback.');
+            $messages = ['currency_code' => '200026: Currency is fallback.'];
+            \Validator::make([], $rules, $messages)->validate();
         }
 
         $this->repository->destroy($currency);

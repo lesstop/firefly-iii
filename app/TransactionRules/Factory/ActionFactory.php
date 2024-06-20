@@ -27,17 +27,14 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Support\Domain;
 use FireflyIII\TransactionRules\Actions\ActionInterface;
-use Log;
 
 /**
  * Class ActionFactory can create actions.
- *
- * @codeCoverageIgnore
  */
 class ActionFactory
 {
     /** @var array array of action types */
-    protected static $actionTypes = [];
+    protected static array $actionTypes = [];
 
     /**
      * This method returns the actual implementation (TransactionRules/Actions/[object]) for a given
@@ -45,28 +42,20 @@ class ActionFactory
      * with value "Groceries" this method will return a corresponding SetCategory object preset
      * to "Groceries". Any transaction journal then fed to this object will have its category changed.
      *
-     * @param  RuleAction  $action
-     *
-     * @return ActionInterface
-     *
      * @throws FireflyException
      */
     public static function getAction(RuleAction $action): ActionInterface
     {
         $class = self::getActionClass($action->action_type);
-        Log::debug(sprintf('self::getActionClass("%s") = "%s"', $action->action_type, $class));
+        app('log')->debug(sprintf('self::getActionClass("%s") = "%s"', $action->action_type, $class));
 
-        return new $class($action);
+        return new $class($action); // @phpstan-ignore-line
     }
 
     /**
      * Returns the class name to be used for actions with the given name. This is a lookup function
      * that will match the given action type (ie. "change_category") to the matching class name
      * (SetCategory) using the configuration (firefly.php).
-     *
-     * @param  string  $actionType
-     *
-     * @return string
      *
      * @throws FireflyException
      */
@@ -78,7 +67,7 @@ class ActionFactory
             throw new FireflyException('No such action exists ("'.e($actionType).'").');
         }
 
-        $class = $actionTypes[$actionType];
+        $class       = $actionTypes[$actionType];
         if (!class_exists($class)) {
             throw new FireflyException('Could not instantiate class for rule action type "'.e($actionType).'" ('.e($class).').');
         }
@@ -88,8 +77,6 @@ class ActionFactory
 
     /**
      * Returns a map with actiontypes, mapped to the class representing that type.
-     *
-     * @return array
      */
     protected static function getActionTypes(): array
     {

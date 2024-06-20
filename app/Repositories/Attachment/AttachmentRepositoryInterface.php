@@ -26,6 +26,7 @@ namespace FireflyIII\Repositories\Attachment;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Attachment;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -33,59 +34,25 @@ use Illuminate\Support\Collection;
  */
 interface AttachmentRepositoryInterface
 {
-    /**
-     * @param  Attachment  $attachment
-     *
-     * @return bool
-     */
     public function destroy(Attachment $attachment): bool;
 
-    /**
-     * @param  Attachment  $attachment
-     *
-     * @return bool
-     */
     public function exists(Attachment $attachment): bool;
 
-    /**
-     * @return Collection
-     */
     public function get(): Collection;
 
-    /**
-     * @param  Attachment  $attachment
-     *
-     * @return string
-     */
     public function getContent(Attachment $attachment): string;
 
     /**
      * Get attachment note text or empty string.
-     *
-     * @param  Attachment  $attachment
-     *
-     * @return string|null
      */
     public function getNoteText(Attachment $attachment): ?string;
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user);
+    public function setUser(null|Authenticatable|User $user): void;
 
     /**
-     * @param  array  $data
-     *
-     * @return Attachment
      * @throws FireflyException
      */
     public function store(array $data): Attachment;
 
-    /**
-     * @param  Attachment  $attachment
-     * @param  array  $attachmentData
-     *
-     * @return Attachment
-     */
     public function update(Attachment $attachment, array $attachmentData): Attachment;
 }

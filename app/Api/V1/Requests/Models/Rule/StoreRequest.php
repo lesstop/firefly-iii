@@ -24,31 +24,29 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Requests\Models\Rule;
 
 use FireflyIII\Rules\IsBoolean;
+use FireflyIII\Rules\IsValidActionExpression;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Support\Request\GetRuleConfiguration;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Validator;
-
-use function is_array;
 
 /**
  * Class StoreRequest
  */
 class StoreRequest extends FormRequest
 {
+    use ChecksLogin;
     use ConvertsDataTypes;
     use GetRuleConfiguration;
-    use ChecksLogin;
 
     /**
      * Get all data from the request.
-     *
-     * @return array
      */
     public function getAll(): array
     {
-        $fields = [
+        $fields           = [
             'title'            => ['title', 'convertString'],
             'description'      => ['description', 'convertString'],
             'rule_group_id'    => ['rule_group_id', 'convertInteger'],
@@ -59,17 +57,13 @@ class StoreRequest extends FormRequest
             'stop_processing'  => ['stop_processing', 'boolean'],
             'active'           => ['active', 'boolean'],
         ];
-        $data   = $this->getAllData($fields);
-
+        $data             = $this->getAllData($fields);
         $data['triggers'] = $this->getRuleTriggers();
         $data['actions']  = $this->getRuleActions();
 
         return $data;
     }
 
-    /**
-     * @return array
-     */
     private function getRuleTriggers(): array
     {
         $triggers = $this->get('triggers');
@@ -77,9 +71,10 @@ class StoreRequest extends FormRequest
         if (is_array($triggers)) {
             foreach ($triggers as $trigger) {
                 $return[] = [
-                    'type'            => $trigger['type'],
-                    'value'           => $trigger['value'],
-                    'active'          => $this->convertBoolean((string)($trigger['active'] ?? 'false')),
+                    'type'            => $trigger['type'] ?? '',
+                    'value'           => $trigger['value'] ?? null,
+                    'prohibited'      => $this->convertBoolean((string)($trigger['prohibited'] ?? 'false')),
+                    'active'          => $this->convertBoolean((string)($trigger['active'] ?? 'true')),
                     'stop_processing' => $this->convertBoolean((string)($trigger['stop_processing'] ?? 'false')),
                 ];
             }
@@ -88,9 +83,6 @@ class StoreRequest extends FormRequest
         return $return;
     }
 
-    /**
-     * @return array
-     */
     private function getRuleActions(): array
     {
         $actions = $this->get('actions');
@@ -100,7 +92,7 @@ class StoreRequest extends FormRequest
                 $return[] = [
                     'type'            => $action['type'],
                     'value'           => $action['value'],
-                    'active'          => $this->convertBoolean((string)($action['active'] ?? 'false')),
+                    'active'          => $this->convertBoolean((string)($action['active'] ?? 'true')),
                     'stop_processing' => $this->convertBoolean((string)($action['stop_processing'] ?? 'false')),
                 ];
             }
@@ -111,30 +103,28 @@ class StoreRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
-        $validTriggers = $this->getTriggers();
-        $validActions  = array_keys(config('firefly.rule-actions'));
+        $validTriggers   = $this->getTriggers();
+        $validActions    = array_keys(config('firefly.rule-actions'));
 
         // some triggers and actions require text:
         $contextTriggers = implode(',', $this->getTriggersWithContext());
         $contextActions  = implode(',', config('firefly.context-rule-actions'));
 
         return [
-            'title'                      => 'required|between:1,100|uniqueObjectForUser:rules,title',
-            'description'                => 'between:1,5000|nullable',
+            'title'                      => 'required|min:1|max:100|uniqueObjectForUser:rules,title',
+            'description'                => 'min:1|max:32768|nullable',
             'rule_group_id'              => 'belongsToUser:rule_groups|required_without:rule_group_title',
-            'rule_group_title'           => 'nullable|between:1,255|required_without:rule_group_id|belongsToUser:rule_groups,title',
+            'rule_group_title'           => 'nullable|min:1|max:255|required_without:rule_group_id|belongsToUser:rule_groups,title',
             'trigger'                    => 'required|in:store-journal,update-journal',
             'triggers.*.type'            => 'required|in:'.implode(',', $validTriggers),
-            'triggers.*.value'           => 'required_if:actions.*.type,'.$contextTriggers.'|min:1|ruleTriggerValue',
+            'triggers.*.value'           => 'required_if:actions.*.type,'.$contextTriggers.'|min:1|ruleTriggerValue|max:1024',
             'triggers.*.stop_processing' => [new IsBoolean()],
             'triggers.*.active'          => [new IsBoolean()],
             'actions.*.type'             => 'required|in:'.implode(',', $validActions),
-            'actions.*.value'            => 'required_if:actions.*.type,'.$contextActions.'|ruleActionValue',
+            'actions.*.value'            => [sprintf('required_if:actions.*.type,%s', $contextActions), new IsValidActionExpression(), 'ruleActionValue'],
             'actions.*.stop_processing'  => [new IsBoolean()],
             'actions.*.active'           => [new IsBoolean()],
             'strict'                     => [new IsBoolean()],
@@ -145,27 +135,24 @@ class StoreRequest extends FormRequest
 
     /**
      * Configure the validator instance.
-     *
-     * @param  Validator  $validator
-     *
-     * @return void
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(
-            function (Validator $validator) {
+            function (Validator $validator): void {
                 $this->atLeastOneTrigger($validator);
                 $this->atLeastOneAction($validator);
                 $this->atLeastOneActiveTrigger($validator);
                 $this->atLeastOneActiveAction($validator);
             }
         );
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 
     /**
      * Adds an error to the validator when there are no triggers in the array of data.
-     *
-     * @param  Validator  $validator
      */
     protected function atLeastOneTrigger(Validator $validator): void
     {
@@ -179,8 +166,6 @@ class StoreRequest extends FormRequest
 
     /**
      * Adds an error to the validator when there are no repetitions in the array of data.
-     *
-     * @param  Validator  $validator
      */
     protected function atLeastOneAction(Validator $validator): void
     {
@@ -194,13 +179,13 @@ class StoreRequest extends FormRequest
 
     /**
      * Adds an error to the validator when there are no ACTIVE triggers in the array of data.
-     *
-     * @param  Validator  $validator
      */
     protected function atLeastOneActiveTrigger(Validator $validator): void
     {
-        $data     = $validator->getData();
-        $triggers = $data['triggers'] ?? [];
+        $data          = $validator->getData();
+
+        /** @var null|array|int|string $triggers */
+        $triggers      = $data['triggers'] ?? [];
         // need at least one trigger
         if (!is_countable($triggers) || 0 === count($triggers)) {
             return;
@@ -223,13 +208,13 @@ class StoreRequest extends FormRequest
 
     /**
      * Adds an error to the validator when there are no ACTIVE actions in the array of data.
-     *
-     * @param  Validator  $validator
      */
     protected function atLeastOneActiveAction(Validator $validator): void
     {
-        $data    = $validator->getData();
-        $actions = $data['actions'] ?? [];
+        $data          = $validator->getData();
+
+        /** @var null|array|int|string $actions */
+        $actions       = $data['actions'] ?? [];
         // need at least one trigger
         if (!is_countable($actions) || 0 === count($actions)) {
             return;

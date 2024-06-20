@@ -32,21 +32,20 @@ use FireflyIII\Repositories\Webhook\WebhookRepositoryInterface;
 use FireflyIII\Transformers\WebhookAttemptTransformer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 use League\Fractal\Resource\Item;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class AttemptController
  */
 class AttemptController extends Controller
 {
-    public const RESOURCE_KEY = 'webhook_attempts';
+    public const string RESOURCE_KEY = 'webhook_attempts';
     private WebhookRepositoryInterface $repository;
 
-    /**
-     * @codeCoverageIgnore
-     */
     public function __construct()
     {
         parent::__construct();
@@ -62,35 +61,37 @@ class AttemptController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/getWebhookMessageAttempts
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/getWebhookMessageAttempts
      *
-     * @param  Webhook  $webhook
-     * @param  WebhookMessage  $message
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function index(Webhook $webhook, WebhookMessage $message): JsonResponse
     {
         if ($message->webhook_id !== $webhook->id) {
-            throw new FireflyException('Webhook and webhook message are no match');
+            throw new FireflyException('200040: Webhook and webhook message are no match');
         }
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User lists webhook attempts of webhook #%d and message #%d, but webhooks are DISABLED.', $webhook->id, $message->id));
 
-        $manager    = $this->getManager();
-        $pageSize   = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
-        $collection = $this->repository->getAttempts($message);
-        $count      = $collection->count();
-        $attempts   = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+        Log::channel('audit')->info(sprintf('User lists webhook attempts of webhook #%d and message #%d.', $webhook->id, $message->id));
+
+        $manager     = $this->getManager();
+        $pageSize    = $this->parameters->get('limit');
+        $collection  = $this->repository->getAttempts($message);
+        $count       = $collection->count();
+        $attempts    = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($attempts, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($attempts, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.webhooks.attempts.index', [$webhook->id, $message->id]).$this->buildParams());
 
         /** @var WebhookAttemptTransformer $transformer */
         $transformer = app(WebhookAttemptTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($attempts, $transformer, 'webhook_attempts');
+        $resource    = new FractalCollection($attempts, $transformer, 'webhook_attempts');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -98,32 +99,35 @@ class AttemptController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/getSingleWebhookMessageAttempt
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/getSingleWebhookMessageAttempt
      *
      * Show single instance.
      *
-     * @param  Webhook  $webhook
-     * @param  WebhookMessage  $message
-     * @param  WebhookAttempt  $attempt
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function show(Webhook $webhook, WebhookMessage $message, WebhookAttempt $attempt): JsonResponse
     {
         if ($message->webhook_id !== $webhook->id) {
-            throw new FireflyException('Webhook and webhook message are no match');
+            throw new FireflyException('200040: Webhook and webhook message are no match');
         }
         if ($attempt->webhook_message_id !== $message->id) {
-            throw new FireflyException('Webhook message and webhook attempt are no match');
+            throw new FireflyException('200041: Webhook message and webhook attempt are no match');
         }
 
-        $manager = $this->getManager();
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User views single webhook attempt #%d of webhook #%d and message #%d, but webhooks are DISABLED', $attempt->id, $webhook->id, $message->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        Log::channel('audit')->info(sprintf('User views single webhook attempt #%d of webhook #%d and message #%d.', $attempt->id, $webhook->id, $message->id));
+
+        $manager     = $this->getManager();
 
         /** @var WebhookAttemptTransformer $transformer */
         $transformer = app(WebhookAttemptTransformer::class);
         $transformer->setParameters($this->parameters);
-        $resource = new Item($attempt, $transformer, self::RESOURCE_KEY);
+        $resource    = new Item($attempt, $transformer, self::RESOURCE_KEY);
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

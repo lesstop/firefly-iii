@@ -23,18 +23,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Services\Internal\Destroy;
 
-use Exception;
 use FireflyIII\Models\Bill;
 
 /**
- * @codeCoverageIgnore
  * Class BillDestroyService
  */
 class BillDestroyService
 {
-    /**
-     * @param  Bill  $bill
-     */
     public function destroy(Bill $bill): void
     {
         $bill->delete();

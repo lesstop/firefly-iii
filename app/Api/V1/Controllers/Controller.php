@@ -27,20 +27,22 @@ namespace FireflyIII\Api\V1\Controllers;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidDateException;
 use Carbon\Exceptions\InvalidFormatException;
+use FireflyIII\Models\Preference;
+use FireflyIII\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
 use League\Fractal\Manager;
 use League\Fractal\Serializer\JsonApiSerializer;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
+use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
  * Class Controller.
  *
- * @codeCoverageIgnore
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings(PHPMD.NumberOfChildren)
  */
 abstract class Controller extends BaseController
 {
@@ -48,7 +50,9 @@ abstract class Controller extends BaseController
     use DispatchesJobs;
     use ValidatesRequests;
 
-    protected const CONTENT_TYPE = 'application/vnd.api+json';
+    protected const string CONTENT_TYPE = 'application/vnd.api+json';
+
+    /** @var array<int, string> */
     protected array        $allowedSort;
     protected ParameterBag $parameters;
 
@@ -59,9 +63,9 @@ abstract class Controller extends BaseController
     {
         // get global parameters
         $this->allowedSort = config('firefly.allowed_sort_parameters');
-        $this->parameters  = $this->getParameters();
         $this->middleware(
             function ($request, $next) {
+                $this->parameters = $this->getParameters();
                 if (auth()->check()) {
                     $language = app('steam')->getLanguage();
                     app()->setLocale($language);
@@ -74,35 +78,45 @@ abstract class Controller extends BaseController
 
     /**
      * Method to grab all parameters from the URL.
-     *
-     * @return ParameterBag
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     private function getParameters(): ParameterBag
     {
-        $bag  = new ParameterBag();
-        $page = (int)request()->get('page');
-
+        $bag      = new ParameterBag();
+        $page     = (int)request()->get('page');
         if ($page < 1) {
             $page = 1;
         }
-        if ($page > (2 ^ 16)) {
-            $page = (2 ^ 16);
+        if ($page > 2 ** 16) {
+            $page = 2 ** 16;
         }
         $bag->set('page', $page);
 
         // some date fields:
-        $dates = ['start', 'end', 'date'];
+        $dates    = ['start', 'end', 'date'];
         foreach ($dates as $field) {
-            $date = request()->query->get($field);
+            $date = null;
+
+            try {
+                $date = request()->query->get($field);
+            } catch (BadRequestException $e) {
+                app('log')->error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $field));
+                app('log')->error($e->getMessage());
+                app('log')->error($e->getTraceAsString());
+                $value = null;
+            }
             $obj  = null;
             if (null !== $date) {
                 try {
-                    $obj = Carbon::parse($date);
+                    $obj = Carbon::parse((string)$date);
                 } catch (InvalidDateException|InvalidFormatException $e) {
                     // don't care
-                    app('log')->warning(sprintf('Ignored invalid date "%s" in API controller parameter check: %s', $date, $e->getMessage()));
+                    app('log')->warning(
+                        sprintf(
+                            'Ignored invalid date "%s" in API controller parameter check: %s',
+                            substr((string)$date, 0, 20),
+                            $e->getMessage()
+                        )
+                    );
                 }
             }
             $bag->set($field, $obj);
@@ -111,9 +125,27 @@ abstract class Controller extends BaseController
         // integer fields:
         $integers = ['limit'];
         foreach ($integers as $integer) {
-            $value = request()->query->get($integer);
+            try {
+                $value = request()->query->get($integer);
+            } catch (BadRequestException $e) {
+                app('log')->error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $integer));
+                app('log')->error($e->getMessage());
+                app('log')->error($e->getTraceAsString());
+                $value = null;
+            }
             if (null !== $value) {
                 $bag->set($integer, (int)$value);
+            }
+            if (null === $value
+                && 'limit' === $integer // @phpstan-ignore-line
+                && auth()->check()) {
+                // set default for user:
+                /** @var User $user */
+                $user     = auth()->user();
+
+                /** @var Preference $pageSize */
+                $pageSize = (int)app('preferences')->getForUser($user, 'listPageSize', 50)->data;
+                $bag->set($integer, $pageSize);
             }
         }
 
@@ -121,19 +153,22 @@ abstract class Controller extends BaseController
         return $this->getSortParameters($bag);
     }
 
-    /**
-     * @param  ParameterBag  $bag
-     *
-     * @return ParameterBag
-     */
     private function getSortParameters(ParameterBag $bag): ParameterBag
     {
         $sortParameters = [];
-        $param          = (string)request()->query->get('sort');
+
+        try {
+            $param = (string)request()->query->get('sort');
+        } catch (BadRequestException $e) {
+            app('log')->error('Request field "sort" contains a non-scalar value. Value set to NULL.');
+            app('log')->error($e->getMessage());
+            app('log')->error($e->getTraceAsString());
+            $param = '';
+        }
         if ('' === $param) {
             return $bag;
         }
-        $parts = explode(',', $param);
+        $parts          = explode(',', $param);
         foreach ($parts as $part) {
             $part      = trim($part);
             $direction = 'asc';
@@ -150,11 +185,8 @@ abstract class Controller extends BaseController
         return $bag;
     }
 
-
     /**
      * Method to help build URL's.
-     *
-     * @return string
      */
     final protected function buildParams(): string
     {
@@ -166,6 +198,7 @@ abstract class Controller extends BaseController
             }
             if ($value instanceof Carbon) {
                 $params[$key] = $value->format('Y-m-d');
+
                 continue;
             }
             $params[$key] = $value;
@@ -174,9 +207,6 @@ abstract class Controller extends BaseController
         return $return.http_build_query($params);
     }
 
-    /**
-     * @return Manager
-     */
     final protected function getManager(): Manager
     {
         // create some objects:

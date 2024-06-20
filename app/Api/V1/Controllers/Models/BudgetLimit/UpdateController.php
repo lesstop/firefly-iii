@@ -43,11 +43,9 @@ class UpdateController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/budgets/updateBudgetLimit
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/budgets/updateBudgetLimit
      *
      * BudgetLimitController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -66,17 +64,14 @@ class UpdateController extends Controller
 
     /**
      * Update the specified resource in storage.
+     * This endpoint is documented at:
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/budgets/updateBudgetLimit
      *
-     * @param  UpdateRequest  $request
-     * @param  Budget  $budget
-     * @param  BudgetLimit  $budgetLimit
-     *
-     * @return JsonResponse
      * @throws FireflyException
      */
     public function update(UpdateRequest $request, Budget $budget, BudgetLimit $budgetLimit): JsonResponse
     {
-        if ((int)$budget->id !== (int)$budgetLimit->budget_id) {
+        if ($budget->id !== $budgetLimit->budget_id) {
             throw new FireflyException('20028: The budget limit does not belong to the budget.');
         }
         $data              = $request->getAll();
@@ -85,10 +80,10 @@ class UpdateController extends Controller
         $manager           = $this->getManager();
 
         /** @var BudgetLimitTransformer $transformer */
-        $transformer = app(BudgetLimitTransformer::class);
+        $transformer       = app(BudgetLimitTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($budgetLimit, $transformer, 'budget_limits');
+        $resource          = new Item($budgetLimit, $transformer, 'budget_limits');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

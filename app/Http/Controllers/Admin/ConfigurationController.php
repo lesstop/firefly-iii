@@ -23,16 +23,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Admin;
 
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Middleware\IsDemoUser;
 use FireflyIII\Http\Requests\ConfigurationRequest;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ConfigurationController.
@@ -41,8 +38,6 @@ class ConfigurationController extends Controller
 {
     /**
      * ConfigurationController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -63,14 +58,11 @@ class ConfigurationController extends Controller
      * Show configuration index.
      *
      * @return Factory|View
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function index()
     {
-        $subTitle     = (string)trans('firefly.instance_configuration');
-        $subTitleIcon = 'fa-wrench';
+        $subTitle       = (string)trans('firefly.instance_configuration');
+        $subTitleIcon   = 'fa-wrench';
 
         Log::channel('audit')->info('User visits admin config index.');
 
@@ -88,10 +80,6 @@ class ConfigurationController extends Controller
 
     /**
      * Store new configuration values.
-     *
-     * @param  ConfigurationRequest  $request
-     *
-     * @return RedirectResponse
      */
     public function postIndex(ConfigurationRequest $request): RedirectResponse
     {

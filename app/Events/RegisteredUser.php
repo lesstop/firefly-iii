@@ -29,8 +29,6 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Class RegisteredUser.
- *
- * @codeCoverageIgnore
  */
 class RegisteredUser extends Event
 {
@@ -40,7 +38,6 @@ class RegisteredUser extends Event
 
     /**
      * Create a new event instance. This event is triggered when a new user registers.
-     * @param  User  $user
      */
     public function __construct(User $user)
     {

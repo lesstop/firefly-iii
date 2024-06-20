@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -30,26 +31,31 @@ return new class () extends Migration {
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
-        Schema::create('invited_users', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-            $table->integer('user_id', false, true);
-            $table->string('email', 255);
-            $table->string('invite_code', 64);
-            $table->dateTime('expires');
-            $table->boolean('redeemed');
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-        });
+        if (!Schema::hasTable('invited_users')) {
+            try {
+                Schema::create('invited_users', static function (Blueprint $table): void {
+                    $table->id();
+                    $table->timestamps();
+                    $table->integer('user_id', false, true);
+                    $table->string('email', 255);
+                    $table->string('invite_code', 64);
+                    $table->dateTime('expires');
+                    $table->boolean('redeemed');
+                    $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                });
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not create table "invited_users": %s', $e->getMessage()));
+                app('log')->error('If this table exists already (see the error message), this is not a problem. Other errors? Please open a discussion on GitHub.');
+            }
+        }
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {

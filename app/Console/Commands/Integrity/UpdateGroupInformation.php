@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Integrity;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\AvailableBudget;
@@ -31,6 +32,7 @@ use FireflyIII\Models\Bill;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
 use FireflyIII\Models\CurrencyExchangeRate;
+use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Models\Recurrence;
 use FireflyIII\Models\Rule;
 use FireflyIII\Models\RuleGroup;
@@ -48,18 +50,10 @@ use Illuminate\Database\QueryException;
  */
 class UpdateGroupInformation extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Makes sure that every object is linked to a group';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:upgrade-group-information';
+    protected $signature   = 'firefly-iii:upgrade-group-information';
 
     /**
      * Execute the console command.
@@ -72,6 +66,7 @@ class UpdateGroupInformation extends Command
         // recurrences, rule groups, rules, tags, transaction groups, transaction journals, webhooks
 
         $users = User::get();
+
         /** @var User $user */
         foreach ($users as $user) {
             $this->updateGroupInfo($user);
@@ -84,16 +79,18 @@ class UpdateGroupInformation extends Command
     {
         $group = $user->userGroup;
         if (null === $group) {
-            $this->warn(sprintf('User "%s" has no group.', $user->email));
+            $this->friendlyWarning(sprintf('User "%s" has no group.', $user->email));
+
             return;
         }
-        $set = [
+        $set   = [
             Account::class,
             Attachment::class,
             AvailableBudget::class,
             Bill::class,
             Budget::class,
             Category::class,
+            ObjectGroup::class,
             CurrencyExchangeRate::class,
             Recurrence::class,
             RuleGroup::class,
@@ -108,22 +105,17 @@ class UpdateGroupInformation extends Command
         }
     }
 
-    /**
-     * @param  User  $user
-     * @param  UserGroup  $group
-     * @param  string  $className
-     * @return void
-     */
     private function updateGroupInfoForObject(User $user, UserGroup $group, string $className): void
     {
         try {
             $result = $className::where('user_id', $user->id)->where('user_group_id', null)->update(['user_group_id' => $group->id]);
         } catch (QueryException $e) {
-            $this->error(sprintf('Could not update group information for "%s" because of error "%s"', $className, $e->getMessage()));
+            $this->friendlyError(sprintf('Could not update group information for "%s" because of error "%s"', $className, $e->getMessage()));
+
             return;
         }
         if (0 !== $result) {
-            $this->line(sprintf('Moved %d %s objects to the correct group.', $result, str_replace('FireflyIII\\Models\\', '', $className)));
+            $this->friendlyPositive(sprintf('User #%d: Moved %d %s objects to the correct group.', $user->id, $result, str_replace('FireflyIII\Models\\', '', $className)));
         }
     }
 }

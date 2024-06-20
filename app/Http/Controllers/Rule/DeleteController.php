@@ -40,8 +40,6 @@ class DeleteController extends Controller
 
     /**
      * RuleController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -62,8 +60,6 @@ class DeleteController extends Controller
     /**
      * Delete a given rule.
      *
-     * @param  Rule  $rule
-     *
      * @return Factory|View
      */
     public function delete(Rule $rule)
@@ -78,10 +74,6 @@ class DeleteController extends Controller
 
     /**
      * Actually destroy the given rule.
-     *
-     * @param  Rule  $rule
-     *
-     * @return RedirectResponse
      */
     public function destroy(Rule $rule): RedirectResponse
     {

@@ -23,63 +23,51 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
 use Illuminate\Console\Command;
-use Log;
 
 /**
  * Class TransferBudgets
  */
 class TransferBudgets extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Removes budgets from transfers.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:fix-transfer-budgets';
+    protected $signature   = 'firefly-iii:fix-transfer-budgets';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
-        $start = microtime(true);
         $set   = TransactionJournal::distinct()
-                                   ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
-                                   ->leftJoin('budget_transaction_journal', 'transaction_journals.id', '=', 'budget_transaction_journal.transaction_journal_id')
-                                   ->whereNotIn('transaction_types.type', [TransactionType::WITHDRAWAL])
-                                   ->whereNotNull('budget_transaction_journal.budget_id')->get(['transaction_journals.*']);
+            ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
+            ->leftJoin('budget_transaction_journal', 'transaction_journals.id', '=', 'budget_transaction_journal.transaction_journal_id')
+            ->whereNotIn('transaction_types.type', [TransactionType::WITHDRAWAL])
+            ->whereNotNull('budget_transaction_journal.budget_id')->get(['transaction_journals.*'])
+        ;
         $count = 0;
+
         /** @var TransactionJournal $entry */
         foreach ($set as $entry) {
             $message = sprintf('Transaction journal #%d is a %s, so has no longer a budget.', $entry->id, $entry->transactionType->type);
-            $this->info($message);
-            Log::debug($message);
+            $this->friendlyInfo($message);
+            app('log')->debug($message);
             $entry->budgets()->sync([]);
-            $count++;
+            ++$count;
         }
         if (0 === $count) {
             $message = 'No invalid budget/journal entries.';
-            Log::debug($message);
-            $this->info($message);
+            $this->friendlyPositive($message);
         }
         if (0 !== $count) {
             $message = sprintf('Corrected %d invalid budget/journal entries (entry).', $count);
-            Log::debug($message);
-            $this->line($message);
+            app('log')->debug($message);
+            $this->friendlyInfo($message);
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Verified budget/journals in %s seconds.', $end));
 
         return 0;
     }

@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
 use Illuminate\Console\Command;
@@ -32,47 +33,33 @@ use Illuminate\Console\Command;
  */
 class RemoveBills extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Remove bills from transactions that shouldn\'t have one.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:remove-bills';
+    protected $signature   = 'firefly-iii:remove-bills';
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
-        $start = microtime(true);
-        /** @var TransactionType|null $withdrawal */
+        /** @var null|TransactionType $withdrawal */
         $withdrawal = TransactionType::where('type', TransactionType::WITHDRAWAL)->first();
         if (null === $withdrawal) {
             return 0;
         }
-        $journals = TransactionJournal::whereNotNull('bill_id')->where('transaction_type_id', '!=', $withdrawal->id)->get();
+        $journals   = TransactionJournal::whereNotNull('bill_id')->where('transaction_type_id', '!=', $withdrawal->id)->get();
+
         /** @var TransactionJournal $journal */
         foreach ($journals as $journal) {
-            $this->line(sprintf('Transaction journal #%d should not be linked to bill #%d.', $journal->id, $journal->bill_id));
+            $this->friendlyWarning(sprintf('Transaction journal #%d will be unlinked from bill #%d.', $journal->id, $journal->bill_id));
             $journal->bill_id = null;
             $journal->save();
         }
-        if (0 === $journals->count()) {
-            $this->info('All transaction journals have correct bill information.');
-        }
         if ($journals->count() > 0) {
-            $this->info('Fixed all transaction journals so they have correct bill information.');
+            $this->friendlyInfo('Fixed all transaction journals so they have correct bill information.');
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Verified bills / journals in %s seconds', $end));
+        $this->friendlyPositive('All bills and journals are OK');
 
         return 0;
     }

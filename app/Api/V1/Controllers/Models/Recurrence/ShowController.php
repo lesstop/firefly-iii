@@ -43,8 +43,6 @@ class ShowController extends Controller
 
     /**
      * RecurrenceController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -61,35 +59,33 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/recurrences/listRecurrence
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/recurrences/listRecurrence
      *
      * List all of them.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
         // types to get, page size:
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
 
         // get list of budgets. Count it and split it.
-        $collection = $this->repository->get();
-        $count      = $collection->count();
-        $piggyBanks = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $collection  = $this->repository->get();
+        $count       = $collection->count();
+        $piggyBanks  = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.recurrences.index').$this->buildParams());
 
         /** @var RecurrenceTransformer $transformer */
         $transformer = app(RecurrenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($piggyBanks, $transformer, 'recurrences');
+        $resource    = new FractalCollection($piggyBanks, $transformer, 'recurrences');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -97,24 +93,19 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/recurrences/getRecurrence
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/recurrences/getRecurrence
      *
      * List single resource.
-     *
-     * @param  Recurrence  $recurrence
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
      */
     public function show(Recurrence $recurrence): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
 
         /** @var RecurrenceTransformer $transformer */
         $transformer = app(RecurrenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($recurrence, $transformer, 'recurrences');
+        $resource    = new Item($recurrence, $transformer, 'recurrences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

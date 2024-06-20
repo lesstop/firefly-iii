@@ -20,6 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Ignore this comment
+
 declare(strict_types=1);
 
 return [
@@ -32,6 +34,8 @@ return [
     // admin test
     'admin_test_subject'                      => 'A test message from your Firefly III installation',
     'admin_test_body'                         => 'This is a test message from your Firefly III instance. It was sent to :email.',
+
+    // Ignore this comment
 
     // invite
     'invitation_created_subject'              => 'An invitation has been created',
@@ -63,12 +67,12 @@ return [
     'registered_welcome'                      => 'Welcome to [Firefly III](:address). Your registration has made it, and this email is here to confirm it. Yay!',
     'registered_pw'                           => 'If you have forgotten your password already, please reset it using [the password reset tool](:address/password/reset).',
     'registered_help'                         => 'There is a help-icon in the top right corner of each page. If you need help, click it!',
-    'registered_doc_html'                     => 'If you haven\'t already, please read the [grand theory](https://docs.firefly-iii.org/about-firefly-iii/personal-finances).',
-    'registered_doc_text'                     => 'If you haven\'t already, please also read the first use guide and the full description.',
     'registered_closing'                      => 'Enjoy!',
     'registered_firefly_iii_link'             => 'Firefly III:',
     'registered_pw_reset_link'                => 'Password reset:',
     'registered_doc_link'                     => 'Documentation:',
+
+    // Ignore this comment
 
     // new version
     'new_version_email_subject'               => 'A new Firefly III version is available',
@@ -107,11 +111,14 @@ return [
     'error_ip'                                => 'The IP address related to this error is: :ip',
     'error_url'                               => 'URL is: :url',
     'error_user_agent'                        => 'User agent: :userAgent',
-    'error_stacktrace'                        => 'The full stacktrace is below. If you think this is a bug in Firefly III, you can forward this message to <a href="mailto:james@firefly-iii.org?subject=BUG!">james@firefly-iii.org</a>. This can help fix the bug you just encountered.',
+    'error_stacktrace'                        => 'The full stacktrace is below. If you think this is a bug in Firefly III, you can forward this message to <a href="mailto:james@firefly-iii.org?subject=I%20found%20a%20bug!">james@firefly-iii.org</a>. This can help fix the bug you just encountered.',
     'error_github_html'                       => 'If you prefer, you can also open a new issue on <a href="https://github.com/firefly-iii/firefly-iii/issues">GitHub</a>.',
     'error_github_text'                       => 'If you prefer, you can also open a new issue on https://github.com/firefly-iii/firefly-iii/issues.',
     'error_stacktrace_below'                  => 'The full stacktrace is below:',
     'error_headers'                           => 'The following headers may also be relevant:',
+    'error_post'                              => 'This was submitted by the user:',
+
+    // Ignore this comment
 
     // report new journals
     'new_journals_subject'                    => 'Firefly III has created a new transaction|Firefly III has created :count new transactions',
@@ -127,5 +134,5 @@ return [
     'bill_warning_end_date_zero'              => 'Your bill **":name"** is due to end on :date. This moment will pass **TODAY!**',
     'bill_warning_extension_date_zero'        => 'Your bill **":name"** is due to be extended or cancelled on :date. This moment will pass **TODAY!**',
     'bill_warning_please_action'              => 'Please take the appropriate action.',
-
 ];
+// Ignore this comment

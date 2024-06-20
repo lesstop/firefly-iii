@@ -26,6 +26,8 @@ namespace FireflyIII\Http\Requests;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Validator;
 
 /**
  * Class LinkTypeFormRequest.
@@ -37,28 +39,33 @@ class LinkTypeFormRequest extends FormRequest
 
     /**
      * Rules for this request.
-     *
-     * @return array
      */
     public function rules(): array
     {
         // fixed
-        $nameRule = 'required|min:1|unique:link_types,name';
+        $nameRule = 'required|max:255|min:1|unique:link_types,name';
         $idRule   = '';
 
         // get parameter link:
-        $link = $this->route()->parameter('linkType');
+        $link     = $this->route()->parameter('linkType');
 
         if (null !== $link) {
             $idRule   = 'exists:link_types,id';
-            $nameRule = 'required|min:1';
+            $nameRule = 'required|max:255|min:1';
         }
 
         return [
             'id'      => $idRule,
             'name'    => $nameRule,
-            'inward'  => 'required|min:1|different:outward',
-            'outward' => 'required|min:1|different:inward',
+            'inward'  => 'required|max:255|min:1|different:outward',
+            'outward' => 'required|max:255|min:1|different:inward',
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        if ($validator->fails()) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        }
     }
 }

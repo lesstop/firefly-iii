@@ -23,97 +23,73 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class CCLiabilities
  */
 class CCLiabilities extends Command
 {
-    public const CONFIG_NAME = '480_cc_liabilities';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Convert old credit card liabilities.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:cc-liabilities {--F|force : Force the execution of this command.}';
+    use ShowsFriendlyMessages;
+
+    public const string CONFIG_NAME = '480_cc_liabilities';
+    protected $description          = 'Convert old credit card liabilities.';
+    protected $signature            = 'firefly-iii:cc-liabilities {--F|force : Force the execution of this command.}';
 
     /**
      * Execute the console command.
      *
-     * @return int
      * @throws FireflyException
      */
     public function handle(): int
     {
-        $start = microtime(true);
-
-
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
-
 
         $ccType   = AccountType::where('type', AccountType::CREDITCARD)->first();
         $debtType = AccountType::where('type', AccountType::DEBT)->first();
         if (null === $ccType || null === $debtType) {
-            $this->info('No incorrectly stored credit card liabilities.');
+            $this->friendlyPositive('No incorrectly stored credit card liabilities.');
+            $this->markAsExecuted();
 
             return 0;
         }
+
         /** @var Collection $accounts */
         $accounts = Account::where('account_type_id', $ccType->id)->get();
         foreach ($accounts as $account) {
             $account->account_type_id = $debtType->id;
             $account->save();
-            $this->line(sprintf('Converted credit card liability account "%s" (#%d) to generic debt liability.', $account->name, $account->id));
+            $this->friendlyInfo(sprintf('Converted credit card liability account "%s" (#%d) to generic debt liability.', $account->name, $account->id));
         }
         if ($accounts->count() > 0) {
-            $this->info('Credit card liability types are no longer supported and have been converted to generic debts. See: https://bit.ly/FF3-credit-cards');
+            $this->friendlyWarning(
+                'Credit card liability types are no longer supported and have been converted to generic debts. See: https://bit.ly/FF3-credit-cards'
+            );
         }
         if (0 === $accounts->count()) {
-            $this->info('No incorrectly stored credit card liabilities.');
+            $this->friendlyPositive('No incorrectly stored credit card liabilities.');
         }
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Verified credit card liabilities in %s seconds', $end));
         $this->markAsExecuted();
 
         return 0;
     }
 
-    /**
-     * @return bool
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function isExecuted(): bool
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
-        if (null !== $configVar) {
-            return (bool)$configVar->data;
-        }
 
-        return false;
+        return (bool)$configVar?->data;
     }
 
-    /**
-     *
-     */
     private function markAsExecuted(): void
     {
         app('fireflyconfig')->set(self::CONFIG_NAME, true);

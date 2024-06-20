@@ -41,13 +41,25 @@ $(function () {
         console.log('action count is zero, add action.');
         addNewAction();
     }
-
+    makeRuleStrict();
     $('.add_rule_trigger').click(addNewTrigger);
     $('.add_rule_action').click(addNewAction);
+    $('#ffInput_strict').change(makeRuleStrict);
     $('.test_rule_triggers').click(testRuleTriggers);
     $('.remove-trigger').unbind('click').click(removeTrigger);
     $('.remove-action').unbind('click').click(removeAction);
 });
+
+function makeRuleStrict() {
+    var value = $('#ffInput_strict').is(':checked');
+    if(value) {
+        // is checked, stop processing triggers is not relevant.
+        $('.trigger-stop-processing').prop('checked', false);
+        $('.trigger-stop-processing').prop('disabled', true);
+        return;
+    }
+    $('.trigger-stop-processing').prop('disabled', false);
+}
 
 /**
  * This method triggers when a new trigger must be added to the form.
@@ -126,7 +138,7 @@ function removeTrigger(e) {
     // remove grand parent:
     target.parent().parent().remove();
 
-    // if now at zero, immediatly add one again:
+    // if now at zero, immediately add one again:
     if ($('.rule-trigger-tbody tr').length === 0) {
         addNewTrigger();
     }
@@ -147,7 +159,7 @@ function removeAction(e) {
     // remove grand parent:
     target.parent().parent().remove();
 
-    // if now at zero, immediatly add one again:
+    // if now at zero, immediately add one again:
     if ($('.rule-action-tbody tr').length === 0) {
         addNewAction();
     }
@@ -162,7 +174,7 @@ function onAddNewAction() {
     "use strict";
     console.log('Now in onAddNewAction()');
 
-    var selectQuery = 'select[name^="actions["][name$="][type]"]';
+    var selectQuery  = 'select[name^="actions["][name$="][type]"]';
     var selectResult = $(selectQuery);
 
     console.log('Select query is "' + selectQuery + '" and the result length is ' + selectResult.length);
@@ -181,6 +193,7 @@ function onAddNewAction() {
         console.log('Trigger updateActionInput() for select ' + select);
         updateActionInput(select);
     });
+    makeRuleStrict();
 }
 
 /**
@@ -190,7 +203,7 @@ function onAddNewTrigger() {
     "use strict";
     console.log('Now in onAddNewTrigger()');
 
-    var selectQuery = 'select[name^="triggers["][name$="][type]"]';
+    var selectQuery  = 'select[name^="triggers["][name$="][type]"]';
     var selectResult = $(selectQuery);
 
     console.log('Select query is "' + selectQuery + '" and the result length is ' + selectResult.length);
@@ -207,6 +220,7 @@ function onAddNewTrigger() {
         console.log('Trigger updateTriggerInput() for select ' + select);
         updateTriggerInput(select);
     });
+    makeRuleStrict();
 }
 
 /**
@@ -217,9 +231,9 @@ function onAddNewTrigger() {
 function updateActionInput(selectList) {
     console.log('Now in updateActionInput() for a select list, currently with value "' + selectList.val() + '".');
     // the actual row this select list is in:
-    var parent = selectList.parent().parent();
+    var parent      = selectList.parent().parent();
     // the text input we're looking for:
-    var inputQuery = 'input[name^="actions["][name$="][value]"]';
+    var inputQuery  = 'input[name^="actions["][name$="][value]"]';
     var inputResult = parent.find(inputQuery);
 
     console.log('Searching for children in this row with query "' + inputQuery + '" resulted in ' + inputResult.length + ' results.');
@@ -234,10 +248,13 @@ function updateActionInput(selectList) {
         case 'clear_budget':
         case 'append_descr_to_notes':
         case 'append_notes_to_descr':
+        case 'switch_accounts':
         case 'move_descr_to_notes':
         case 'move_notes_to_descr':
         case 'clear_notes':
         case 'delete_transaction':
+        case 'set_source_to_cash':
+        case 'set_destination_to_cash':
         case 'remove_all_tags':
             console.log('Select list value is ' + selectList.val() + ', so input needs to be disabled.');
             inputResult.prop('disabled', true);
@@ -296,9 +313,9 @@ function updateActionInput(selectList) {
 function updateTriggerInput(selectList) {
     console.log('Now in updateTriggerInput() for a select list, currently with value "' + selectList.val() + '".');
     // the actual row this select list is in:
-    var parent = selectList.parent().parent();
+    var parent      = selectList.parent().parent();
     // the text input we're looking for:
-    var inputQuery = 'input[name^="triggers["][name$="][value]"]';
+    var inputQuery  = 'input[name^="triggers["][name$="][value]"]';
     var inputResult = parent.find(inputQuery);
 
     console.log('Searching for children in this row with query "' + inputQuery + '" resulted in ' + inputResult.length + ' results.');
@@ -391,32 +408,50 @@ function createAutoComplete(input, URL) {
     input.typeahead('destroy');
 
     // append URL:
-    var lastChar = URL[URL.length - 1];
+    var lastChar      = URL[URL.length - 1];
     var urlParamSplit = '?';
     if ('&' === lastChar) {
         urlParamSplit = '';
     }
     var source = new Bloodhound({
-        datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name'),
-        queryTokenizer: Bloodhound.tokenizers.whitespace,
-        prefetch: {
-            url: URL + urlParamSplit + 'uid=' + uid,
-            filter: function (list) {
-                return $.map(list, function (item) {
-                    return {name: item.name};
-                });
-            }
-        },
-        remote: {
-            url: URL + urlParamSplit + 'query=%QUERY&uid=' + uid,
-            wildcard: '%QUERY',
-            filter: function (list) {
-                return $.map(list, function (item) {
-                    return {name: item.name};
-                });
-            }
-        }
-    });
+                                    datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name'),
+                                    queryTokenizer: Bloodhound.tokenizers.whitespace,
+                                    prefetch: {
+                                        url: URL + urlParamSplit + 'uid=' + uid,
+                                        filter: function (list) {
+                                            return $.map(list, function (item) {
+                                                if (item.hasOwnProperty('active') && item.active === true) {
+                                                    return {name: item.name};
+                                                }
+                                                if (item.hasOwnProperty('active') && item.active === false) {
+                                                    return;
+                                                }
+                                                if (item.hasOwnProperty('active')) {
+                                                    console.log(item.active);
+                                                }
+                                                return {name: item.name};
+                                            });
+                                        }
+                                    },
+                                    remote: {
+                                        url: URL + urlParamSplit + 'query=%QUERY&uid=' + uid,
+                                        wildcard: '%QUERY',
+                                        filter: function (list) {
+                                            return $.map(list, function (item) {
+                                                if (item.hasOwnProperty('active') && item.active === true) {
+                                                    return {name: item.name};
+                                                }
+                                                if (item.hasOwnProperty('active') && item.active === false) {
+                                                    return;
+                                                }
+                                                if (item.hasOwnProperty('active')) {
+                                                    console.log(item.active);
+                                                }
+                                                return {name: item.name};
+                                            });
+                                        }
+                                    }
+                                });
     source.initialize();
     input.typeahead({hint: true, highlight: true,}, {source: source, displayKey: 'name', autoSelect: false});
 }

@@ -30,7 +30,6 @@ use FireflyIII\Notifications\Admin\TestNotification;
 use FireflyIII\Notifications\Admin\UserInvitation;
 use FireflyIII\Notifications\Admin\VersionCheckResult;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
-use FireflyIII\Support\Facades\FireflyConfig;
 use Illuminate\Support\Facades\Notification;
 
 /**
@@ -38,13 +37,9 @@ use Illuminate\Support\Facades\Notification;
  */
 class AdminEventHandler
 {
-    /**
-     * @param  InvitationCreated  $event
-     * @return void
-     */
     public function sendInvitationNotification(InvitationCreated $event): void
     {
-        $sendMail = FireflyConfig::get('notification_invite_created', true)->data;
+        $sendMail   = app('fireflyconfig')->get('notification_invite_created', true)->data;
         if (false === $sendMail) {
             return;
         }
@@ -54,20 +49,33 @@ class AdminEventHandler
         $all        = $repository->all();
         foreach ($all as $user) {
             if ($repository->hasRole($user, 'owner')) {
-                Notification::send($user, new UserInvitation($event->invitee));
+                try {
+                    Notification::send($user, new UserInvitation($event->invitee));
+                } catch (\Exception $e) { // @phpstan-ignore-line
+                    $message = $e->getMessage();
+                    if (str_contains($message, 'Bcc')) {
+                        app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                        return;
+                    }
+                    if (str_contains($message, 'RFC 2822')) {
+                        app('log')->warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                        return;
+                    }
+                    app('log')->error($e->getMessage());
+                    app('log')->error($e->getTraceAsString());
+                }
             }
         }
     }
 
     /**
      * Send new version message to admin.
-     *
-     * @param  NewVersionAvailable  $event
-     * @return void
      */
     public function sendNewVersion(NewVersionAvailable $event): void
     {
-        $sendMail = FireflyConfig::get('notification_new_version', true)->data;
+        $sendMail   = app('fireflyconfig')->get('notification_new_version', true)->data;
         if (false === $sendMail) {
             return;
         }
@@ -77,17 +85,29 @@ class AdminEventHandler
         $all        = $repository->all();
         foreach ($all as $user) {
             if ($repository->hasRole($user, 'owner')) {
-                Notification::send($user, new VersionCheckResult($event->message));
+                try {
+                    Notification::send($user, new VersionCheckResult($event->message));
+                } catch (\Exception $e) {// @phpstan-ignore-line
+                    $message = $e->getMessage();
+                    if (str_contains($message, 'Bcc')) {
+                        app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                        return;
+                    }
+                    if (str_contains($message, 'RFC 2822')) {
+                        app('log')->warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                        return;
+                    }
+                    app('log')->error($e->getMessage());
+                    app('log')->error($e->getTraceAsString());
+                }
             }
         }
     }
 
     /**
      * Sends a test message to an administrator.
-     *
-     * @param  AdminRequestedTestMessage  $event
-     *
-     * @return void
      */
     public function sendTestMessage(AdminRequestedTestMessage $event): void
     {
@@ -98,6 +118,22 @@ class AdminEventHandler
             return;
         }
 
-        Notification::send($event->user, new TestNotification($event->user->email));
+        try {
+            Notification::send($event->user, new TestNotification($event->user->email));
+        } catch (\Exception $e) { // @phpstan-ignore-line
+            $message = $e->getMessage();
+            if (str_contains($message, 'Bcc')) {
+                app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                return;
+            }
+            if (str_contains($message, 'RFC 2822')) {
+                app('log')->warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                return;
+            }
+            app('log')->error($e->getMessage());
+            app('log')->error($e->getTraceAsString());
+        }
     }
 }

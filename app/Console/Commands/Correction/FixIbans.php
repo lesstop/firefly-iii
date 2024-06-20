@@ -24,48 +24,93 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Correction;
 
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\AccountType;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 
 /**
  * Class FixIbans
  */
 class FixIbans extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    use ShowsFriendlyMessages;
+
     protected $description = 'Removes spaces from IBANs';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:fix-ibans';
+    protected $signature   = 'firefly-iii:fix-ibans';
+    private int $count     = 0;
 
     /**
      * Execute the console command.
-     *
-     * @return int
      */
     public function handle(): int
     {
         $accounts = Account::whereNotNull('iban')->get();
-        /** @var Account $account */
-        foreach ($accounts as $account) {
-            $iban = $account->iban;
-            if (str_contains($iban, ' ')) {
-                $iban = app('steam')->filterSpaces((string)$account->iban);
-                if ('' !== $iban) {
-                    $account->iban = $iban;
-                    $account->save();
-                    $this->line(sprintf('Removed spaces from IBAN of account #%d', $account->id));
-                }
-            }
+        $this->filterIbans($accounts);
+        $this->countAndCorrectIbans($accounts);
+        if (0 === $this->count) {
+            $this->friendlyPositive('All IBANs are valid.');
         }
 
         return 0;
+    }
+
+    private function filterIbans(Collection $accounts): void
+    {
+        /** @var Account $account */
+        foreach ($accounts as $account) {
+            $iban    = (string) $account->iban;
+            $newIban = app('steam')->filterSpaces($iban);
+            if ('' !== $iban && $iban !== $newIban) {
+                $account->iban = $newIban;
+                $account->save();
+                $this->friendlyInfo(sprintf('Removed spaces from IBAN of account #%d', $account->id));
+                ++$this->count;
+            }
+        }
+    }
+
+    private function countAndCorrectIbans(Collection $accounts): void
+    {
+        $set = [];
+
+        /** @var Account $account */
+        foreach ($accounts as $account) {
+            $userId = $account->user_id;
+            $set[$userId] ??= [];
+            $iban   = (string) $account->iban;
+            if ('' === $iban) {
+                continue;
+            }
+            $type   = $account->accountType->type;
+            if (in_array($type, [AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE], true)) {
+                $type = 'liabilities';
+            }
+            if (array_key_exists($iban, $set[$userId])) {
+                // iban already in use! two exceptions exist:
+                if (
+                    !(AccountType::EXPENSE === $set[$userId][$iban] && AccountType::REVENUE === $type) // allowed combination
+                    && !(AccountType::REVENUE === $set[$userId][$iban] && AccountType::EXPENSE === $type) // also allowed combination.
+                ) {
+                    $this->friendlyWarning(
+                        sprintf(
+                            'IBAN "%s" is used more than once and will be removed from %s #%d ("%s")',
+                            $iban,
+                            $account->accountType->type,
+                            $account->id,
+                            $account->name
+                        )
+                    );
+                    $account->iban = null;
+                    $account->save();
+                    ++$this->count;
+                }
+            }
+
+            if (!array_key_exists($iban, $set[$userId])) {
+                $set[$userId][$iban] = $type;
+            }
+        }
     }
 }

@@ -23,24 +23,27 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * FireflyIII\Models\Preference
  *
- * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property int $user_id
- * @property string $name
- * @property int|string|array|null $data
- * @property-read User $user
+ * @property int                        $id
+ * @property null|Carbon                $created_at
+ * @property null|Carbon                $updated_at
+ * @property int                        $user_id
+ * @property string                     $name
+ * @property null|array|bool|int|string $data
+ * @property User                       $user
+ *
  * @method static Builder|Preference newModelQuery()
  * @method static Builder|Preference newQuery()
  * @method static Builder|Preference query()
@@ -50,64 +53,76 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * @method static Builder|Preference whereName($value)
  * @method static Builder|Preference whereUpdatedAt($value)
  * @method static Builder|Preference whereUserId($value)
+ *
+ * @property mixed $user_group_id
+ *
  * @mixin Eloquent
  */
 class Preference extends Model
 {
-    /**
-     * The attributes that should be casted to native types.
-     *
-     * @var array
-     */
+    use ReturnsIntegerIdTrait;
+    use ReturnsIntegerUserIdTrait;
+
     protected $casts
-        = [
+                        = [
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'data'       => 'array',
         ];
 
-    /** @var array Fields that can be filled */
     protected $fillable = ['user_id', 'data', 'name'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
      *
-     * @param  string  $value
-     *
-     * @return Preference
      * @throws NotFoundHttpException
      */
-    public static function routeBinder(string $value): Preference
+    public static function routeBinder(string $value): self
     {
         if (auth()->check()) {
             /** @var User $user */
-            $user = auth()->user();
-            /** @var Preference|null $preference */
-            $preference = $user->preferences()->where('name', $value)->first();
+            $user        = auth()->user();
+
+            // some preferences do not have an administration ID.
+            // some need it, to make sure the correct one is selected.
+            $userGroupId = (int)$user->user_group_id;
+            $userGroupId = 0 === $userGroupId ? null : $userGroupId;
+
+            /** @var null|Preference $preference */
+            $preference  = null;
+            $items       = config('firefly.admin_specific_prefs');
+            if (null !== $userGroupId && in_array($value, $items, true)) {
+                // find a preference with a specific user_group_id
+                $preference = $user->preferences()->where('user_group_id', $userGroupId)->where('name', $value)->first();
+            }
+            if (!in_array($value, $items, true)) {
+                // find any one.
+                $preference = $user->preferences()->where('name', $value)->first();
+            }
+
+            // try again with ID, but this time don't care about the preferred user_group_id
             if (null === $preference) {
                 $preference = $user->preferences()->where('id', (int)$value)->first();
             }
             if (null !== $preference) {
                 return $preference;
             }
-            $default = config('firefly.default_preferences');
+            $default     = config('firefly.default_preferences');
             if (array_key_exists($value, $default)) {
-                $preference          = new Preference();
-                $preference->name    = $value;
-                $preference->data    = $default[$value];
-                $preference->user_id = $user->id;
+                $preference                = new self();
+                $preference->name          = $value;
+                $preference->data          = $default[$value];
+                $preference->user_id       = (int)$user->id;
+                $preference->user_group_id = in_array($value, $items, true) ? $userGroupId : null;
                 $preference->save();
 
                 return $preference;
             }
         }
+
         throw new NotFoundHttpException();
     }
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

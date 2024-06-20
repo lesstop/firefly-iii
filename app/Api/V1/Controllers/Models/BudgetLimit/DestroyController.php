@@ -40,8 +40,6 @@ class DestroyController extends Controller
 
     /**
      * BudgetLimitController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -60,16 +58,11 @@ class DestroyController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/budgets/deleteBudgetLimit
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/budgets/deleteBudgetLimit
      *
      * Remove the specified resource from storage.
      *
-     * @param  Budget  $budget
-     * @param  BudgetLimit  $budgetLimit
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function destroy(Budget $budget, BudgetLimit $budgetLimit): JsonResponse
     {

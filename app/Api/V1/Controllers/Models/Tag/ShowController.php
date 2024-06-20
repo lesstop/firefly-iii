@@ -44,8 +44,6 @@ class ShowController extends Controller
 
     /**
      * TagController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -53,7 +51,7 @@ class ShowController extends Controller
         $this->middleware(
             function ($request, $next) {
                 /** @var User $user */
-                $user = auth()->user();
+                $user             = auth()->user();
 
                 $this->repository = app(TagRepositoryInterface::class);
                 $this->repository->setUser($user);
@@ -65,34 +63,32 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/tags/listTag
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/tags/listTag
      *
      * List all of them.
      *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function index(): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
         // types to get, page size:
-        $pageSize = (int)app('preferences')->getForUser(auth()->user(), 'listPageSize', 50)->data;
+        $pageSize    = $this->parameters->get('limit');
 
         // get list of budgets. Count it and split it.
-        $collection = $this->repository->get();
-        $count      = $collection->count();
-        $rules      = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $collection  = $this->repository->get();
+        $count       = $collection->count();
+        $rules       = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
 
         // make paginator:
-        $paginator = new LengthAwarePaginator($rules, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($rules, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.tags.index').$this->buildParams());
 
         /** @var TagTransformer $transformer */
         $transformer = app(TagTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new FractalCollection($rules, $transformer, 'tags');
+        $resource    = new FractalCollection($rules, $transformer, 'tags');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -100,23 +96,19 @@ class ShowController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/tags/getTag
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/tags/getTag
      *
      * List single resource.
-     *
-     * @param  Tag  $tag
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
      */
     public function show(Tag $tag): JsonResponse
     {
-        $manager = $this->getManager();
+        $manager     = $this->getManager();
+
         /** @var TagTransformer $transformer */
         $transformer = app(TagTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource = new Item($tag, $transformer, 'tags');
+        $resource    = new Item($tag, $transformer, 'tags');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

@@ -23,8 +23,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
-use Auth;
-use DB;
 use FireflyIII\Events\UserChangedEmail;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Exceptions\ValidationException;
@@ -35,11 +33,8 @@ use FireflyIII\Http\Requests\ProfileFormRequest;
 use FireflyIII\Http\Requests\TokenFormRequest;
 use FireflyIII\Models\Preference;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
-use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Support\Http\Controllers\CreateStuff;
 use FireflyIII\User;
-use Google2FA;
-use Hash;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Guard;
 use Illuminate\Contracts\Foundation\Application;
@@ -50,31 +45,24 @@ use Illuminate\Routing\Redirector;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Laravel\Passport\ClientRepository;
-use Log;
 use PragmaRX\Google2FA\Exceptions\IncompatibleWithGoogleAuthenticatorException;
 use PragmaRX\Google2FA\Exceptions\InvalidCharactersException;
 use PragmaRX\Google2FA\Exceptions\SecretKeyTooShortException;
 use PragmaRX\Recovery\Recovery;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ProfileController.
  *
  * @method Guard guard()
- *
  */
 class ProfileController extends Controller
 {
     use CreateStuff;
 
     protected bool $internalAuth;
-    protected bool $internalIdentity;
 
     /**
      * ProfileController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -88,11 +76,9 @@ class ProfileController extends Controller
                 return $next($request);
             }
         );
-        $loginProvider          = config('firefly.login_provider');
-        $authGuard              = config('firefly.authentication_guard');
-        $this->internalAuth     = 'web' === $authGuard;
-        $this->internalIdentity = 'eloquent' === $loginProvider;
-        Log::debug(sprintf('ProfileController::__construct(). Login provider is "%s", authentication guard is "%s"', $loginProvider, $authGuard));
+        $authGuard          = config('firefly.authentication_guard');
+        $this->internalAuth = 'web' === $authGuard;
+        app('log')->debug(sprintf('ProfileController::__construct(). Authentication guard is "%s"', $authGuard));
 
         $this->middleware(IsDemoUser::class)->except(['index']);
     }
@@ -100,31 +86,26 @@ class ProfileController extends Controller
     /**
      * View that generates a 2FA code for the user.
      *
-     * @param  Request  $request
-     *
-     * @return Factory|View|RedirectResponse
      * @throws IncompatibleWithGoogleAuthenticatorException
      * @throws InvalidCharactersException
      * @throws SecretKeyTooShortException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
-    public function code(Request $request): Factory|View|RedirectResponse
+    public function code(Request $request): Factory|RedirectResponse|View
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
         }
         $domain           = $this->getDomain();
-        $secretPreference = Preferences::get('temp-mfa-secret');
-        $codesPreference  = Preferences::get('temp-mfa-codes');
+        $secretPreference = app('preferences')->get('temp-mfa-secret');
+        $codesPreference  = app('preferences')->get('temp-mfa-codes');
 
         // generate secret if not in session
         if (null === $secretPreference) {
             // generate secret + store + flash
-            $secret = Google2FA::generateSecretKey();
-            Preferences::set('temp-mfa-secret', $secret);
+            $secret = \Google2FA::generateSecretKey();
+            app('preferences')->set('temp-mfa-secret', $secret);
         }
 
         // re-use secret if in session
@@ -132,25 +113,31 @@ class ProfileController extends Controller
             // get secret from session and flash
             $secret = $secretPreference->data;
         }
+        if (is_array($secret)) {
+            $secret = '';
+        }
 
         // generate recovery codes if not in session:
-        $recoveryCodes = '';
+        $recoveryCodes    = '';
 
         if (null === $codesPreference) {
             // generate codes + store + flash:
             $recovery      = app(Recovery::class);
             $recoveryCodes = $recovery->lowercase()->setCount(8)->setBlocks(2)->setChars(6)->toArray();
-            Preferences::set('temp-mfa-codes', $recoveryCodes);
+            app('preferences')->set('temp-mfa-codes', $recoveryCodes);
         }
 
         // get codes from session if present already:
         if (null !== $codesPreference) {
             $recoveryCodes = $codesPreference->data;
         }
+        if (!is_array($recoveryCodes)) {
+            $recoveryCodes = [];
+        }
 
-        $codes = implode("\r\n", $recoveryCodes);
+        $codes            = implode("\r\n", $recoveryCodes);
 
-        $image = Google2FA::getQRCodeInline($domain, auth()->user()->email, $secret);
+        $image            = \Google2FA::getQRCodeInline($domain, auth()->user()->email, (string)$secret);
 
         return view('profile.code', compact('image', 'secret', 'codes'));
     }
@@ -158,22 +145,19 @@ class ProfileController extends Controller
     /**
      * Screen to confirm email change.
      *
-     * @param  UserRepositoryInterface  $repository
-     * @param  string  $token
-     *
-     * @return RedirectResponse|Redirector
-     *
      * @throws FireflyException
      */
-    public function confirmEmailChange(UserRepositoryInterface $repository, string $token): RedirectResponse|Redirector
+    public function confirmEmailChange(UserRepositoryInterface $repository, string $token): Redirector|RedirectResponse
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             throw new FireflyException(trans('firefly.external_user_mgt_disabled'));
         }
+
         // find preference with this token value.
         /** @var Collection $set */
         $set  = app('preferences')->findByName('email_change_confirm_token');
         $user = null;
+
         /** @var Preference $preference */
         foreach ($set as $preference) {
             if ($preference->data === $token) {
@@ -194,14 +178,10 @@ class ProfileController extends Controller
 
     /**
      * Delete your account view.
-     *
-     * @param  Request  $request
-     *
-     * @return View|RedirectResponse
      */
-    public function deleteAccount(Request $request): View|RedirectResponse
+    public function deleteAccount(Request $request): RedirectResponse|View
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -215,24 +195,23 @@ class ProfileController extends Controller
 
     /**
      * Delete 2FA routine.
-     *
-     * @return RedirectResponse|Redirector
      */
-    public function deleteCode(Request $request): RedirectResponse|Redirector
+    public function deleteCode(Request $request): Redirector|RedirectResponse
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
         }
+
         /** @var UserRepositoryInterface $repository */
         $repository = app(UserRepositoryInterface::class);
 
         /** @var User $user */
-        $user = auth()->user();
+        $user       = auth()->user();
 
-        Preferences::delete('temp-mfa-secret');
-        Preferences::delete('temp-mfa-codes');
+        app('preferences')->delete('temp-mfa-secret');
+        app('preferences')->delete('temp-mfa-codes');
         $repository->setMFACode($user, null);
         app('preferences')->mark();
 
@@ -244,12 +223,10 @@ class ProfileController extends Controller
 
     /**
      * Enable 2FA screen.
-     *
-     * @return RedirectResponse|Redirector
      */
-    public function enable2FA(Request $request): RedirectResponse|Redirector
+    public function enable2FA(Request $request): Redirector|RedirectResponse
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -274,22 +251,22 @@ class ProfileController extends Controller
     /**
      * Index for profile.
      *
-     * @return Factory|View
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function index(): Factory|View
     {
         /** @var User $user */
-        $user               = auth()->user();
-        $isInternalAuth     = $this->internalAuth;
-        $isInternalIdentity = $this->internalIdentity;
-        $count              = DB::table('oauth_clients')->where('personal_access_client', true)->whereNull('user_id')->count();
-        $subTitle           = $user->email;
-        $userId             = $user->id;
-        $enabled2FA         = null !== $user->mfa_secret;
-        $mfaBackupCount     = count(app('preferences')->get('mfa_recovery', [])->data);
+        $user           = auth()->user();
+        $isInternalAuth = $this->internalAuth;
+        $count          = \DB::table('oauth_clients')->where('personal_access_client', true)->whereNull('user_id')->count();
+        $subTitle       = $user->email;
+        $userId         = $user->id;
+        $enabled2FA     = null !== $user->mfa_secret;
+        $recoveryData   = app('preferences')->get('mfa_recovery', [])->data;
+        if (!is_array($recoveryData)) {
+            $recoveryData = [];
+        }
+        $mfaBackupCount = count($recoveryData);
         $this->createOAuthKeys();
 
         if (0 === $count) {
@@ -298,7 +275,7 @@ class ProfileController extends Controller
             $repository->createPersonalAccessClient(null, config('app.name').' Personal Access Client', 'http://localhost');
         }
 
-        $accessToken = app('preferences')->get('access_token');
+        $accessToken    = app('preferences')->get('access_token');
         if (null === $accessToken) {
             $token       = $user->generateAccessToken();
             $accessToken = app('preferences')->set('access_token', $token);
@@ -306,14 +283,11 @@ class ProfileController extends Controller
 
         return view(
             'profile.index',
-            compact('subTitle', 'mfaBackupCount', 'userId', 'accessToken', 'enabled2FA', 'isInternalAuth', 'isInternalIdentity')
+            compact('subTitle', 'mfaBackupCount', 'userId', 'accessToken', 'enabled2FA', 'isInternalAuth')
         );
     }
 
-    /**
-     * @return Factory|View|RedirectResponse
-     */
-    public function logoutOtherSessions(): Factory|View|RedirectResponse
+    public function logoutOtherSessions(): Factory|RedirectResponse|View
     {
         if (!$this->internalAuth) {
             session()->flash('info', (string)trans('firefly.external_auth_disabled'));
@@ -325,14 +299,11 @@ class ProfileController extends Controller
     }
 
     /**
-     * @param  Request  $request
-     *
-     * @return Factory|View|RedirectResponse
      * @throws FireflyException
      */
-    public function newBackupCodes(Request $request): Factory|View|RedirectResponse
+    public function newBackupCodes(Request $request): Factory|RedirectResponse|View
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -341,10 +312,11 @@ class ProfileController extends Controller
         // generate recovery codes:
         $recovery      = app(Recovery::class);
         $recoveryCodes = $recovery->lowercase()
-                                  ->setCount(8)     // Generate 8 codes
-                                  ->setBlocks(2)    // Every code must have 7 blocks
-                                  ->setChars(6)     // Each block must have 16 chars
-                                  ->toArray();
+            ->setCount(8)     // Generate 8 codes
+            ->setBlocks(2)    // Every code must have 7 blocks
+            ->setChars(6)     // Each block must have 16 chars
+            ->toArray()
+        ;
         $codes         = implode("\r\n", $recoveryCodes);
 
         app('preferences')->set('mfa_recovery', $recoveryCodes);
@@ -355,15 +327,10 @@ class ProfileController extends Controller
 
     /**
      * Submit the change email form.
-     *
-     * @param  EmailFormRequest  $request
-     * @param  UserRepositoryInterface  $repository
-     *
-     * @return Factory|RedirectResponse|Redirector
      */
-    public function postChangeEmail(EmailFormRequest $request, UserRepositoryInterface $repository): Factory|RedirectResponse|Redirector
+    public function postChangeEmail(EmailFormRequest $request, UserRepositoryInterface $repository): Factory|Redirector|RedirectResponse
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -381,7 +348,7 @@ class ProfileController extends Controller
         $existing = $repository->findByEmail($newEmail);
         if (null !== $existing) {
             // force user logout.
-            Auth::guard()->logout(); // @phpstan-ignore-line (does not recognize function)
+            \Auth::guard()->logout(); // @phpstan-ignore-line (does not recognize function)
             $request->session()->invalidate();
 
             session()->flash('success', (string)trans('firefly.email_changed'));
@@ -395,7 +362,7 @@ class ProfileController extends Controller
         event(new UserChangedEmail($user, $newEmail, $oldEmail));
 
         // force user logout.
-        Auth::guard()->logout(); // @phpstan-ignore-line (does not recognize function)
+        \Auth::guard()->logout(); // @phpstan-ignore-line (does not recognize function)
         $request->session()->invalidate();
         session()->flash('success', (string)trans('firefly.email_changed'));
 
@@ -404,14 +371,10 @@ class ProfileController extends Controller
 
     /**
      * Change your email address.
-     *
-     * @param  Request  $request
-     *
-     * @return Factory|RedirectResponse|View
      */
     public function changeEmail(Request $request): Factory|RedirectResponse|View
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -428,14 +391,11 @@ class ProfileController extends Controller
     /**
      * Submit change password form.
      *
-     * @param  ProfileFormRequest  $request
-     * @param  UserRepositoryInterface  $repository
-     *
-     * @return RedirectResponse|Redirector
+     * @return Redirector|RedirectResponse
      */
     public function postChangePassword(ProfileFormRequest $request, UserRepositoryInterface $repository)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -444,8 +404,10 @@ class ProfileController extends Controller
         // the request has already validated both new passwords must be equal.
         $current = $request->get('current_password');
         $new     = $request->get('new_password');
+
         /** @var User $user */
-        $user = auth()->user();
+        $user    = auth()->user();
+
         try {
             $this->validatePassword($user, $current, $new);
         } catch (ValidationException $e) {
@@ -463,13 +425,11 @@ class ProfileController extends Controller
     /**
      * Change your password.
      *
-     * @param  Request  $request
-     *
-     * @return Factory|RedirectResponse|Redirector|View
+     * @return Factory|Redirector|RedirectResponse|View
      */
     public function changePassword(Request $request)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -485,37 +445,39 @@ class ProfileController extends Controller
     /**
      * Submit 2FA for the first time.
      *
-     * @param  TokenFormRequest  $request
+     * @return Redirector|RedirectResponse
      *
-     * @return RedirectResponse|Redirector
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     public function postCode(TokenFormRequest $request)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
         }
 
         /** @var User $user */
-        $user = auth()->user();
+        $user       = auth()->user();
+
         /** @var UserRepositoryInterface $repository */
         $repository = app(UserRepositoryInterface::class);
-        $secret     = Preferences::get('temp-mfa-secret')?->data;
+        $secret     = app('preferences')->get('temp-mfa-secret')?->data;
+        if (is_array($secret)) {
+            $secret = null;
+        }
+        $secret     = (string)$secret;
 
         $repository->setMFACode($user, $secret);
 
-        Preferences::delete('temp-mfa-secret');
-        Preferences::delete('temp-mfa-codes');
+        app('preferences')->delete('temp-mfa-secret');
+        app('preferences')->delete('temp-mfa-codes');
 
         session()->flash('success', (string)trans('firefly.saved_preferences'));
         app('preferences')->mark();
 
         // also save the code so replay attack is prevented.
-        $mfaCode = $request->get('code');
+        $mfaCode    = $request->get('code');
         $this->addToMFAHistory($mfaCode);
 
         // save backup codes in preferences:
@@ -523,7 +485,7 @@ class ProfileController extends Controller
 
         // make sure MFA is logged out.
         if ('testing' !== config('app.env')) {
-            Google2FA::logout();
+            \Google2FA::logout();
         }
 
         // drop all info from session:
@@ -535,11 +497,7 @@ class ProfileController extends Controller
     /**
      * TODO duplicate code.
      *
-     * @param  string  $mfaCode
-     *
      * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
      */
     private function addToMFAHistory(string $mfaCode): void
     {
@@ -580,27 +538,25 @@ class ProfileController extends Controller
     /**
      * Submit delete account.
      *
-     * @param  UserRepositoryInterface  $repository
-     * @param  DeleteAccountFormRequest  $request
-     *
-     * @return RedirectResponse|Redirector
+     * @return Redirector|RedirectResponse
      */
     public function postDeleteAccount(UserRepositoryInterface $repository, DeleteAccountFormRequest $request)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
         }
 
-        if (!Hash::check($request->get('password'), auth()->user()->password)) {
+        if (!\Hash::check($request->get('password'), auth()->user()->password)) {
             session()->flash('error', (string)trans('firefly.invalid_password'));
 
             return redirect(route('profile.delete-account'));
         }
+
         /** @var User $user */
         $user = auth()->user();
-        Log::info(sprintf('User #%d has opted to delete their account', auth()->user()->id));
+        app('log')->info(sprintf('User #%d has opted to delete their account', auth()->user()->id));
         // make repository delete user:
         auth()->logout();
         session()->flush();
@@ -610,9 +566,8 @@ class ProfileController extends Controller
     }
 
     /**
-     * @param  Request  $request
+     * @return Application|Redirector|RedirectResponse
      *
-     * @return Application|RedirectResponse|Redirector
      * @throws AuthenticationException
      */
     public function postLogoutOtherSessions(Request $request)
@@ -626,8 +581,8 @@ class ProfileController extends Controller
             'email'    => auth()->user()->email,
             'password' => $request->get('password'),
         ];
-        if (Auth::once($creds)) {
-            Auth::logoutOtherDevices($request->get('password'));
+        if (\Auth::once($creds)) {
+            \Auth::logoutOtherDevices($request->get('password'));
             session()->flash('info', (string)trans('firefly.other_sessions_logged_out'));
 
             return redirect(route('profile.index'));
@@ -640,14 +595,13 @@ class ProfileController extends Controller
     /**
      * Regenerate access token.
      *
-     * @param  Request  $request
+     * @return Redirector|RedirectResponse
      *
-     * @return RedirectResponse|Redirector
-     * @throws FireflyException
+     * @throws \Exception
      */
     public function regenerate(Request $request)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             $request->session()->flash('error', trans('firefly.external_user_mgt_disabled'));
 
             return redirect(route('profile.index'));
@@ -665,23 +619,20 @@ class ProfileController extends Controller
     /**
      * Undo change of user email address.
      *
-     * @param  UserRepositoryInterface  $repository
-     * @param  string  $token
-     * @param  string  $hash
-     *
-     * @return RedirectResponse|Redirector
+     * @return Redirector|RedirectResponse
      *
      * @throws FireflyException
      */
     public function undoEmailChange(UserRepositoryInterface $repository, string $token, string $hash)
     {
-        if (!$this->internalAuth || !$this->internalIdentity) {
+        if (!$this->internalAuth) {
             throw new FireflyException(trans('firefly.external_user_mgt_disabled'));
         }
 
         // find preference with this token value.
-        $set  = app('preferences')->findByName('email_change_undo_token');
-        $user = null;
+        $set   = app('preferences')->findByName('email_change_undo_token');
+        $user  = null;
+
         /** @var Preference $preference */
         foreach ($set as $preference) {
             if ($preference->data === $token) {
@@ -693,13 +644,15 @@ class ProfileController extends Controller
         }
 
         // found user.which email address to return to?
-        $set = app('preferences')->beginsWith($user, 'previous_email_');
+        $set   = app('preferences')->beginsWith($user, 'previous_email_');
+
         /** @var string $match */
         $match = null;
         foreach ($set as $entry) {
             $hashed = hash('sha256', sprintf('%s%s', (string)config('app.key'), $entry->data));
             if ($hashed === $hash) {
                 $match = $entry->data;
+
                 break;
             }
         }

@@ -31,17 +31,12 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Class UpdateRequest
- *
- * @codeCoverageIgnore
  */
 class UpdateRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
-    /**
-     * @return array
-     */
     public function getUpdateData(): array
     {
         $fields = [
@@ -54,8 +49,6 @@ class UpdateRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -63,7 +56,7 @@ class UpdateRequest extends FormRequest
         $objectGroup = $this->route()->parameter('objectGroup');
 
         return [
-            'title' => sprintf('min:1|uniqueObjectGroup:%d', $objectGroup->id),
+            'title' => sprintf('max:1024|min:1|uniqueObjectGroup:%d', $objectGroup->id),
             'order' => 'numeric',
         ];
     }

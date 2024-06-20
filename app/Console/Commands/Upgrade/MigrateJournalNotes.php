@@ -23,56 +23,44 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
-use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\TransactionJournalMeta;
 use Illuminate\Console\Command;
-use Illuminate\Database\QueryException;
-use Log;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class MigrateJournalNotes
  */
 class MigrateJournalNotes extends Command
 {
-    public const CONFIG_NAME = '480_migrate_notes';
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Migrate notes for transaction journals.';
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'firefly-iii:migrate-notes {--F|force : Force the execution of this command.}';
+    use ShowsFriendlyMessages;
+
+    public const string CONFIG_NAME = '480_migrate_notes';
+
+    protected $description          = 'Migrate notes for transaction journals.';
+
+    protected $signature            = 'firefly-iii:migrate-notes {--F|force : Force the execution of this command.}';
 
     /**
      * Execute the console command.
-     *
-     * @return int
-     * @throws FireflyException
      */
     public function handle(): int
     {
         $start = microtime(true);
 
         if ($this->isExecuted() && true !== $this->option('force')) {
-            $this->warn('This command has already been executed.');
+            $this->friendlyInfo('This command has already been executed.');
 
             return 0;
         }
 
         $count = 0;
         $set   = TransactionJournalMeta::whereName('notes')->get();
+
         /** @var TransactionJournalMeta $meta */
         foreach ($set as $meta) {
-            $journal = $meta->transactionJournal;
-            $note    = $journal->notes()->first();
+            $journal    = $meta->transactionJournal;
+            $note       = $journal->notes()->first();
             if (null === $note) {
                 $note = new Note();
                 $note->noteable()->associate($journal);
@@ -80,32 +68,26 @@ class MigrateJournalNotes extends Command
 
             $note->text = $meta->data;
             $note->save();
-            Log::debug(sprintf('Migrated meta note #%d to Note #%d', $meta->id, $note->id));
+            app('log')->debug(sprintf('Migrated meta note #%d to Note #%d', $meta->id, $note->id));
             $meta->delete();
 
-            $count++;
+            ++$count;
         }
 
         if (0 === $count) {
-            $this->line('No notes to migrate.');
+            $this->friendlyPositive('No notes to migrate.');
         }
         if (0 !== $count) {
-            $this->line(sprintf('Migrated %d note(s).', $count));
+            $this->friendlyInfo(sprintf('Migrated %d note(s).', $count));
         }
 
-        $end = round(microtime(true) - $start, 2);
-        $this->info(sprintf('Migrated notes in %s seconds.', $end));
+        $end   = round(microtime(true) - $start, 2);
+        $this->friendlyInfo(sprintf('Migrated notes in %s seconds.', $end));
         $this->markAsExecuted();
 
         return 0;
     }
 
-    /**
-     * @return bool
-     * @throws FireflyException
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
     private function isExecuted(): bool
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
@@ -116,9 +98,6 @@ class MigrateJournalNotes extends Command
         return false;
     }
 
-    /**
-     *
-     */
     private function markAsExecuted(): void
     {
         app('fireflyconfig')->set(self::CONFIG_NAME, true);

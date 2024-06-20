@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\Admin;
 
+use FireflyIII\Support\Notifications\UrlValidator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
@@ -40,8 +41,6 @@ class TestNotification extends Notification
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(string $address)
     {
@@ -51,33 +50,42 @@ class TestNotification extends Notification
     /**
      * Get the array representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
      * @return array
      */
     public function toArray($notifiable)
     {
         return [
-            //
         ];
     }
 
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
      * @return MailMessage
      */
     public function toMail($notifiable)
     {
         return (new MailMessage())
             ->markdown('emails.admin-test', ['email' => $this->address])
-            ->subject((string)trans('email.admin_test_subject'));
+            ->subject((string)trans('email.admin_test_subject'))
+        ;
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  mixed  $notifiable
+     * @param mixed $notifiable
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
      * @return SlackMessage
      */
     public function toSlack($notifiable)
@@ -88,11 +96,19 @@ class TestNotification extends Notification
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
+     * @param mixed $notifiable
+     *
      * @return array
      */
     public function via($notifiable)
     {
-        return ['mail', 'slack'];
+        $slackUrl = app('fireflyconfig')->get('slack_webhook_url', '')->data;
+        if (UrlValidator::isValidWebhookURL($slackUrl)) {
+            return ['mail', 'slack'];
+        }
+
+        return ['mail'];
     }
 }

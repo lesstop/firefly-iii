@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 
 /**
@@ -34,8 +35,6 @@ class ChangesForV530 extends Migration
 {
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {
@@ -46,33 +45,44 @@ class ChangesForV530 extends Migration
     /**
      * Run the migrations.
      *
-     * @return void
+     * @SuppressWarnings(PHPMD.ShortMethodName)
      */
     public function up(): void
     {
         if (!Schema::hasTable('object_groups')) {
-            Schema::create(
-                'object_groups',
-                static function (Blueprint $table) {
-                    $table->increments('id');
-                    $table->integer('user_id', false, true);
-                    $table->timestamps();
-                    $table->softDeletes();
-                    $table->string('title', 255);
-                    $table->mediumInteger('order', false, true)->default(0);
-                    $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-                }
-            );
+            try {
+                Schema::create(
+                    'object_groups',
+                    static function (Blueprint $table): void {
+                        $table->increments('id');
+                        $table->integer('user_id', false, true);
+                        $table->timestamps();
+                        $table->softDeletes();
+                        $table->string('title', 255);
+                        $table->mediumInteger('order', false, true)->default(0);
+                        $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not create table "object_groups": %s', $e->getMessage()));
+                app('log')->error('If this table exists already (see the error message), this is not a problem. Other errors? Please open a discussion on GitHub.');
+            }
         }
+
         if (!Schema::hasTable('object_groupables')) {
-            Schema::create(
-                'object_groupables',
-                static function (Blueprint $table) {
-                    $table->integer('object_group_id');
-                    $table->integer('object_groupable_id', false, true);
-                    $table->string('object_groupable_type', 255);
-                }
-            );
+            try {
+                Schema::create(
+                    'object_groupables',
+                    static function (Blueprint $table): void {
+                        $table->integer('object_group_id');
+                        $table->integer('object_groupable_id', false, true);
+                        $table->string('object_groupable_type', 255);
+                    }
+                );
+            } catch (QueryException $e) {
+                app('log')->error(sprintf('Could not create table "object_groupables": %s', $e->getMessage()));
+                app('log')->error('If this table exists already (see the error message), this is not a problem. Other errors? Please open a discussion on GitHub.');
+            }
         }
     }
 }

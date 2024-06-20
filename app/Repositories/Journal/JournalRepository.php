@@ -37,6 +37,7 @@ use FireflyIII\Services\Internal\Destroy\TransactionGroupDestroyService;
 use FireflyIII\Services\Internal\Update\JournalUpdateService;
 use FireflyIII\Support\CacheProperties;
 use FireflyIII\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
@@ -44,13 +45,8 @@ use Illuminate\Support\Collection;
  */
 class JournalRepository implements JournalRepositoryInterface
 {
-    /** @var User */
-    private $user;
+    private User $user;
 
-    /**
-     * @param  TransactionGroup  $transactionGroup
-     *
-     */
     public function destroyGroup(TransactionGroup $transactionGroup): void
     {
         /** @var TransactionGroupDestroyService $service */
@@ -58,10 +54,6 @@ class JournalRepository implements JournalRepositoryInterface
         $service->destroy($transactionGroup);
     }
 
-    /**
-     * @param  TransactionJournal  $journal
-     *
-     */
     public function destroyJournal(TransactionJournal $journal): void
     {
         /** @var JournalDestroyService $service */
@@ -69,26 +61,22 @@ class JournalRepository implements JournalRepositoryInterface
         $service->destroy($journal);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function findByType(array $types): Collection
     {
         return $this->user
             ->transactionJournals()
             ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
             ->whereIn('transaction_types.type', $types)
-            ->get(['transaction_journals.*']);
+            ->get(['transaction_journals.*'])
+        ;
     }
 
     /**
      * Get users first transaction journal or NULL.
-     *
-     * @return TransactionJournal|null
      */
     public function firstNull(): ?TransactionJournal
     {
-        /** @var TransactionJournal $entry */
+        /** @var null|TransactionJournal $entry */
         $entry  = $this->user->transactionJournals()->orderBy('date', 'ASC')->first(['transaction_journals.*']);
         $result = null;
         if (null !== $entry) {
@@ -98,12 +86,9 @@ class JournalRepository implements JournalRepositoryInterface
         return $result;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getDestinationAccount(TransactionJournal $journal): Account
     {
-        /** @var Transaction $transaction */
+        /** @var null|Transaction $transaction */
         $transaction = $journal->transactions()->with('account')->where('amount', '>', 0)->first();
         if (null === $transaction) {
             throw new FireflyException(sprintf('Your administration is broken. Transaction journal #%d has no destination transaction.', $journal->id));
@@ -114,14 +99,10 @@ class JournalRepository implements JournalRepositoryInterface
 
     /**
      * Return total amount of journal. Is always positive.
-     *
-     * @param  TransactionJournal  $journal
-     *
-     * @return string
      */
     public function getJournalTotal(TransactionJournal $journal): string
     {
-        $cache = new CacheProperties();
+        $cache  = new CacheProperties();
         $cache->addProperty($journal->id);
         $cache->addProperty('amount-positive');
         if ($cache->has()) {
@@ -136,12 +117,9 @@ class JournalRepository implements JournalRepositoryInterface
         return $amount;
     }
 
-    /**
-     * @return TransactionJournal|null
-     */
     public function getLast(): ?TransactionJournal
     {
-        /** @var TransactionJournal $entry */
+        /** @var null|TransactionJournal $entry */
         $entry  = $this->user->transactionJournals()->orderBy('date', 'DESC')->first(['transaction_journals.*']);
         $result = null;
         if (null !== $entry) {
@@ -151,29 +129,16 @@ class JournalRepository implements JournalRepositoryInterface
         return $result;
     }
 
-    /**
-     * @param  TransactionJournalLink  $link
-     *
-     * @return string
-     */
     public function getLinkNoteText(TransactionJournalLink $link): string
     {
-        /** @var Note $note */
+        /** @var null|Note $note */
         $note = $link->notes()->first();
-        if (null !== $note) {
-            return $note->text ?? '';
-        }
 
-        return '';
+        return (string)$note?->text;
     }
 
     /**
      * Return Carbon value of a meta field (or NULL).
-     *
-     * @param  int  $journalId
-     * @param  string  $field
-     *
-     * @return null|Carbon
      */
     public function getMetaDateById(int $journalId, string $field): ?Carbon
     {
@@ -186,7 +151,8 @@ class JournalRepository implements JournalRepositoryInterface
             return new Carbon($cache->get());
         }
         $entry = TransactionJournalMeta::where('transaction_journal_id', $journalId)
-                                       ->where('name', $field)->first();
+            ->where('name', $field)->first()
+        ;
         if (null === $entry) {
             return null;
         }
@@ -196,12 +162,9 @@ class JournalRepository implements JournalRepositoryInterface
         return $value;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getSourceAccount(TransactionJournal $journal): Account
     {
-        /** @var Transaction $transaction */
+        /** @var null|Transaction $transaction */
         $transaction = $journal->transactions()->with('account')->where('amount', '<', 0)->first();
         if (null === $transaction) {
             throw new FireflyException(sprintf('Your administration is broken. Transaction journal #%d has no source transaction.', $journal->id));
@@ -210,22 +173,15 @@ class JournalRepository implements JournalRepositoryInterface
         return $transaction->account;
     }
 
-    /**
-     * @param  int  $journalId
-     */
     public function reconcileById(int $journalId): void
     {
-        /** @var TransactionJournal $journal */
+        /** @var null|TransactionJournal $journal */
         $journal = $this->user->transactionJournals()->find($journalId);
         $journal?->transactions()->update(['reconciled' => true]);
     }
 
     /**
      * Find a specific journal.
-     *
-     * @param  int  $journalId
-     *
-     * @return TransactionJournal|null
      */
     public function find(int $journalId): ?TransactionJournal
     {
@@ -234,38 +190,35 @@ class JournalRepository implements JournalRepositoryInterface
 
     /**
      * Search in journal descriptions.
-     *
-     * @param  string  $search
-     * @param  int  $limit
-     *
-     * @return Collection
      */
     public function searchJournalDescriptions(string $search, int $limit): Collection
     {
         $query = $this->user->transactionJournals()
-                            ->orderBy('date', 'DESC');
-        if ('' !== $query) {
+            ->orderBy('date', 'DESC')
+        ;
+        if ('' !== $search) {
             $query->where('description', 'LIKE', sprintf('%%%s%%', $search));
         }
 
         return $query->take($limit)->get();
     }
 
-    /**
-     * @param  User  $user
-     */
-    public function setUser(User $user): void
+    public function setUser(null|Authenticatable|User $user): void
     {
-        $this->user = $user;
+        if ($user instanceof User) {
+            $this->user = $user;
+        }
+    }
+
+    public function unreconcileById(int $journalId): void
+    {
+        /** @var null|TransactionJournal $journal */
+        $journal = $this->user->transactionJournals()->find($journalId);
+        $journal?->transactions()->update(['reconciled' => false]);
     }
 
     /**
      * Update budget for a journal.
-     *
-     * @param  TransactionJournal  $journal
-     * @param  int  $budgetId
-     *
-     * @return TransactionJournal
      */
     public function updateBudget(TransactionJournal $journal, int $budgetId): TransactionJournal
     {
@@ -286,11 +239,6 @@ class JournalRepository implements JournalRepositoryInterface
 
     /**
      * Update category for a journal.
-     *
-     * @param  TransactionJournal  $journal
-     * @param  string  $category
-     *
-     * @return TransactionJournal
      */
     public function updateCategory(TransactionJournal $journal, string $category): TransactionJournal
     {
@@ -310,11 +258,6 @@ class JournalRepository implements JournalRepositoryInterface
 
     /**
      * Update tag(s) for a journal.
-     *
-     * @param  TransactionJournal  $journal
-     * @param  array  $tags
-     *
-     * @return TransactionJournal
      */
     public function updateTags(TransactionJournal $journal, array $tags): TransactionJournal
     {

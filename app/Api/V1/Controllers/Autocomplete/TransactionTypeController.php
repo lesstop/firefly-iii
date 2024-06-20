@@ -53,17 +53,12 @@ class TransactionTypeController extends Controller
 
     /**
      * This endpoint is documented at
-     * https://api-docs.firefly-iii.org/#/autocomplete/getTransactionTypesAC
-     *
-     * @param  AutocompleteRequest  $request
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
+     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionTypesAC
      */
     public function transactionTypes(AutocompleteRequest $request): JsonResponse
     {
         $data  = $request->getData();
-        $types = $this->repository->searchTypes($data['query'], $data['limit']);
+        $types = $this->repository->searchTypes($data['query'], $this->parameters->get('limit'));
         $array = [];
 
         /** @var TransactionType $type */

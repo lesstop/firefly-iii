@@ -25,27 +25,53 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V2\Controllers\Model\Account;
 
 use FireflyIII\Api\V2\Controllers\Controller;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Account;
+use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface;
 use FireflyIII\Transformers\V2\AccountTransformer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
+ * Show = show a single account.
+ * Index = show all accounts
  * Class ShowController
  */
 class ShowController extends Controller
 {
+    public const string RESOURCE_KEY                  = 'accounts';
+
+    private AccountRepositoryInterface $repository;
+    protected array                    $acceptedRoles = [UserRoleEnum::READ_ONLY, UserRoleEnum::MANAGE_TRANSACTIONS];
+
     /**
-     * @param  Account  $account
-     * @return JsonResponse
+     * AccountController constructor.
      */
-    public function show(Request $request, Account $account): JsonResponse
+    public function __construct()
+    {
+        parent::__construct();
+        $this->middleware(
+            function ($request, $next) {
+                $this->repository = app(AccountRepositoryInterface::class);
+                // new way of user group validation
+                $userGroup        = $this->validateUserGroup($request);
+                $this->repository->setUserGroup($userGroup);
+
+                return $next($request);
+            }
+        );
+    }
+
+    /**
+     * TODO this endpoint is not yet reachable.
+     */
+    public function show(Account $account): JsonResponse
     {
         $transformer = new AccountTransformer();
         $transformer->setParameters($this->parameters);
 
         return response()
             ->api($this->jsonApiObject('accounts', $account, $transformer))
-            ->header('Content-Type', self::CONTENT_TYPE);
+            ->header('Content-Type', self::CONTENT_TYPE)
+        ;
     }
 }

@@ -31,18 +31,14 @@ use Illuminate\Validation\Rule;
 
 /**
  * Class UpdateRequest
- *
- * @codeCoverageIgnore
  */
 class UpdateRequest extends FormRequest
 {
-    use ConvertsDataTypes;
     use ChecksLogin;
+    use ConvertsDataTypes;
 
     /**
      * Get all data from the request.
-     *
-     * @return array
      */
     public function getAll(): array
     {
@@ -55,8 +51,6 @@ class UpdateRequest extends FormRequest
 
     /**
      * The rules that the incoming request must be matched against.
-     *
-     * @return array
      */
     public function rules(): array
     {
@@ -64,9 +58,9 @@ class UpdateRequest extends FormRequest
         $linkType = $this->route()->parameter('linkType');
 
         return [
-            'name'    => [Rule::unique('link_types', 'name')->ignore($linkType->id), 'min:1'],
-            'outward' => ['different:inward', Rule::unique('link_types', 'outward')->ignore($linkType->id), 'min:1'],
-            'inward'  => ['different:outward', Rule::unique('link_types', 'inward')->ignore($linkType->id), 'min:1'],
+            'name'    => [Rule::unique('link_types', 'name')->ignore($linkType->id), 'min:1', 'max:1024'],
+            'outward' => ['different:inward', Rule::unique('link_types', 'outward')->ignore($linkType->id), 'min:1', 'max:1024'],
+            'inward'  => ['different:outward', Rule::unique('link_types', 'inward')->ignore($linkType->id), 'min:1', 'max:1024'],
         ];
     }
 }

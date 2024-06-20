@@ -43,8 +43,6 @@ class CategoryController extends Controller
 
     /**
      * AccountController constructor.
-     *
-     * @codeCoverageIgnore
      */
     public function __construct()
     {
@@ -66,11 +64,7 @@ class CategoryController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/insight/insightTransferCategory
-     *
-     * @param  GenericRequest  $request
-     *
-     * @return JsonResponse
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/insight/insightTransferCategory
      */
     public function category(GenericRequest $request): JsonResponse
     {
@@ -82,9 +76,11 @@ class CategoryController extends Controller
         if (0 === $categories->count()) {
             $categories = $this->repository->getCategories();
         }
+
         /** @var Category $category */
         foreach ($categories as $category) {
             $expenses = $this->opsRepository->sumTransfers($start, $end, $assetAccounts, new Collection([$category]));
+
             /** @var array $expense */
             foreach ($expenses as $expense) {
                 $result[] = [
@@ -103,11 +99,7 @@ class CategoryController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/insight/insightTransferNoCategory
-     *
-     * @param  GenericRequest  $request
-     *
-     * @return JsonResponse
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/insight/insightTransferNoCategory
      */
     public function noCategory(GenericRequest $request): JsonResponse
     {
@@ -116,6 +108,7 @@ class CategoryController extends Controller
         $assetAccounts = $request->getAssetAccounts();
         $result        = [];
         $expenses      = $this->noRepository->sumTransfers($start, $end, $assetAccounts);
+
         /** @var array $expense */
         foreach ($expenses as $expense) {
             $result[] = [

@@ -29,14 +29,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @codeCoverageIgnore
  * Class Amount.
  *
- * @method string formatAnything(TransactionCurrency $format, string $amount, bool $coloured = true)
- * @method Collection getAllCurrencies()
- * @method Collection getCurrencies()
- * @method string getCurrencyCode()
- * @method string getCurrencySymbol()
+ * @method string              formatAnything(TransactionCurrency $format, string $amount, bool $coloured = true)
+ * @method Collection          getAllCurrencies()
+ * @method Collection          getCurrencies()
+ * @method string              getCurrencyCode()
+ * @method string              getCurrencySymbol()
  * @method TransactionCurrency getDefaultCurrency()
  * @method TransactionCurrency getDefaultCurrencyByUser(User $user)
  */
@@ -44,8 +43,6 @@ class Amount extends Facade
 {
     /**
      * Get the registered name of the component.
-     *
-     * @return string
      */
     protected static function getFacadeAccessor(): string
     {

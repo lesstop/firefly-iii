@@ -29,7 +29,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * @codeCoverageIgnore
  * Class SearchServiceProvider.
  */
 class SearchServiceProvider extends ServiceProvider
@@ -37,9 +36,7 @@ class SearchServiceProvider extends ServiceProvider
     /**
      * Bootstrap the application services.
      */
-    public function boot(): void
-    {
-    }
+    public function boot(): void {}
 
     /**
      * Register the application services.
@@ -48,7 +45,7 @@ class SearchServiceProvider extends ServiceProvider
     {
         $this->app->bind(
             SearchInterface::class,
-            function (Application $app) {
+            static function (Application $app) {
                 /** @var OperatorQuerySearch $search */
                 $search = app(OperatorQuerySearch::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)

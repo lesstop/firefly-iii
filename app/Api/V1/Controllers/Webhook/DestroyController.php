@@ -31,6 +31,8 @@ use FireflyIII\Models\WebhookAttempt;
 use FireflyIII\Models\WebhookMessage;
 use FireflyIII\Repositories\Webhook\WebhookRepositoryInterface;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Class DestroyController
@@ -39,9 +41,6 @@ class DestroyController extends Controller
 {
     private WebhookRepositoryInterface $repository;
 
-    /**
-     * @codeCoverageIgnore
-     */
     public function __construct()
     {
         parent::__construct();
@@ -57,17 +56,19 @@ class DestroyController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/deleteWebhook
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/deleteWebhook
      *
      * Remove the specified resource from storage.
-     *
-     * @param  Webhook  $webhook
-     *
-     * @return JsonResponse
-     * @codeCoverageIgnore
      */
     public function destroy(Webhook $webhook): JsonResponse
     {
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User tries to destroy webhook #%d. but webhooks are DISABLED.', $webhook->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        Log::channel('audit')->info(sprintf('User destroys webhook #%d.', $webhook->id));
         $this->repository->destroy($webhook);
         app('preferences')->mark();
 
@@ -76,26 +77,28 @@ class DestroyController extends Controller
 
     /**
      * This webhook is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/deleteWebhookMessageAttempt
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/deleteWebhookMessageAttempt
      *
      * Remove the specified resource from storage.
      *
-     * @param  Webhook  $webhook
-     * @param  WebhookMessage  $message
-     * @param  WebhookAttempt  $attempt
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function destroyAttempt(Webhook $webhook, WebhookMessage $message, WebhookAttempt $attempt): JsonResponse
     {
         if ($message->webhook_id !== $webhook->id) {
-            throw new FireflyException('Webhook and webhook message are no match');
+            throw new FireflyException('200040: Webhook and webhook message are no match');
         }
         if ($attempt->webhook_message_id !== $message->id) {
-            throw new FireflyException('Webhook message and webhook attempt are no match');
+            throw new FireflyException('200041: Webhook message and webhook attempt are no match');
         }
+
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User tries to destroy webhook #%d, message #%d, attempt #%d, but webhooks are DISABLED.', $webhook->id, $message->id, $attempt->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+
+        Log::channel('audit')->info(sprintf('User destroys webhook #%d, message #%d, attempt #%d.', $webhook->id, $message->id, $attempt->id));
 
         $this->repository->destroyAttempt($attempt);
         app('preferences')->mark();
@@ -105,22 +108,25 @@ class DestroyController extends Controller
 
     /**
      * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/#/webhooks/deleteWebhookMessage
+     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/deleteWebhookMessage
      *
      * Remove the specified resource from storage.
      *
-     * @param  Webhook  $webhook
-     * @param  WebhookMessage  $message
-     *
-     * @return JsonResponse
      * @throws FireflyException
-     * @codeCoverageIgnore
      */
     public function destroyMessage(Webhook $webhook, WebhookMessage $message): JsonResponse
     {
         if ($message->webhook_id !== $webhook->id) {
-            throw new FireflyException('Webhook and webhook message are no match');
+            throw new FireflyException('200040: Webhook and webhook message are no match');
         }
+
+        if (false === config('firefly.allow_webhooks')) {
+            Log::channel('audit')->warning(sprintf('User tries to destroy webhook #%d, message #%d, but webhooks are DISABLED.', $webhook->id, $message->id));
+
+            throw new NotFoundHttpException('Webhooks are not enabled.');
+        }
+        Log::channel('audit')->info(sprintf('User destroys webhook #%d, message #%d.', $webhook->id, $message->id));
+
         $this->repository->destroyMessage($message);
         app('preferences')->mark();
 

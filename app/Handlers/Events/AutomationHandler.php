@@ -24,12 +24,12 @@ declare(strict_types=1);
 namespace FireflyIII\Handlers\Events;
 
 use FireflyIII\Events\RequestedReportOnJournals;
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Notifications\User\TransactionCreation;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use Illuminate\Support\Facades\Notification;
-use Log;
 
 /**
  * Class AutomationHandler
@@ -39,32 +39,59 @@ class AutomationHandler
     /**
      * Respond to the creation of X journals.
      *
-     * @param  RequestedReportOnJournals  $event
+     * @throws FireflyException
      */
     public function reportJournals(RequestedReportOnJournals $event): void
     {
-        Log::debug('In reportJournals.');
-        $sendReport = config('firefly.send_report_journals');
+        app('log')->debug('In reportJournals.');
+
+        /** @var UserRepositoryInterface $repository */
+        $repository  = app(UserRepositoryInterface::class);
+        $user        = $repository->find($event->userId);
+
+        /** @var bool $sendReport */
+        $sendReport  = app('preferences')->getForUser($user, 'notification_transaction_creation', false)->data;
+
         if (false === $sendReport) {
+            app('log')->debug('Not sending report, because config says so.');
+
             return;
         }
 
-        /** @var UserRepositoryInterface $repository */
-        $repository = app(UserRepositoryInterface::class);
-        $user       = $repository->find($event->userId);
         if (null === $user || 0 === $event->groups->count()) {
+            app('log')->debug('No transaction groups in event, nothing to email about.');
+
             return;
         }
+        app('log')->debug('Continue with message!');
 
         // transform groups into array:
         /** @var TransactionGroupTransformer $transformer */
         $transformer = app(TransactionGroupTransformer::class);
         $groups      = [];
+
         /** @var TransactionGroup $group */
         foreach ($event->groups as $group) {
             $groups[] = $transformer->transformObject($group);
         }
 
-        Notification::send($user, new TransactionCreation($groups));
+        try {
+            Notification::send($user, new TransactionCreation($groups));
+        } catch (\Exception $e) { // @phpstan-ignore-line
+            $message = $e->getMessage();
+            if (str_contains($message, 'Bcc')) {
+                app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                return;
+            }
+            if (str_contains($message, 'RFC 2822')) {
+                app('log')->warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+
+                return;
+            }
+            app('log')->error($e->getMessage());
+            app('log')->error($e->getTraceAsString());
+        }
+        app('log')->debug('If there is no error above this line, message was sent.');
     }
 }

@@ -28,23 +28,23 @@ declare(strict_types=1);
 |
 | The first thing we will do is create a new Laravel application instance
 | which serves as the "glue" for all the components of Laravel, and is
-| the IoC container for the system binding all of the various parts.
+| the IoC container for the system binding all the various parts.
 |
 */
 
-bcscale(24);
+bcscale(12);
 
 if (!function_exists('envNonEmpty')) {
     /**
-     * @param  string  $key
-     * @param  null  $default
+     * @param string               $key
+     * @param string|int|bool|null $default
      *
      * @return mixed|null
      */
-    function envNonEmpty(string $key, $default = null)
+    function envNonEmpty(string $key, string | int | bool | null $default = null)
     {
         $result = env($key, $default);
-        if (is_string($result) && '' === $result) {
+        if ('' === $result) {
             $result = $default;
         }
 
@@ -52,21 +52,21 @@ if (!function_exists('envNonEmpty')) {
     }
 }
 
-if (!function_exists('str_is_equal')) {
+if (!function_exists('stringIsEqual')) {
     /**
-     * @param  string  $left
-     * @param  string  $right
+     * @param string $left
+     * @param string $right
      *
      * @return bool
      */
-    function str_is_equal(string $left, string $right): bool
+    function stringIsEqual(string $left, string $right): bool
     {
         return $left === $right;
     }
 }
 
 $app = new Illuminate\Foundation\Application(
-    realpath(__DIR__.'/../')
+    (string)realpath(__DIR__ . '/../')
 );
 
 /*

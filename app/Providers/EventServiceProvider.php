@@ -26,9 +26,14 @@ namespace FireflyIII\Providers;
 use FireflyIII\Events\ActuallyLoggedIn;
 use FireflyIII\Events\Admin\InvitationCreated;
 use FireflyIII\Events\AdminRequestedTestMessage;
-use FireflyIII\Events\ChangedPiggyBankAmount;
 use FireflyIII\Events\DestroyedTransactionGroup;
 use FireflyIII\Events\DetectedNewIPAddress;
+use FireflyIII\Events\Model\BudgetLimit\Created;
+use FireflyIII\Events\Model\BudgetLimit\Deleted;
+use FireflyIII\Events\Model\BudgetLimit\Updated;
+use FireflyIII\Events\Model\PiggyBank\ChangedAmount;
+use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
+use FireflyIII\Events\Model\Rule\RuleActionFailedOnObject;
 use FireflyIII\Events\NewVersionAvailable;
 use FireflyIII\Events\RegisteredUser;
 use FireflyIII\Events\RequestedNewPassword;
@@ -42,28 +47,49 @@ use FireflyIII\Events\UpdatedAccount;
 use FireflyIII\Events\UpdatedTransactionGroup;
 use FireflyIII\Events\UserChangedEmail;
 use FireflyIII\Events\WarnUserAboutBill;
-use FireflyIII\Models\BudgetLimit;
+use FireflyIII\Handlers\Observer\AccountObserver;
+use FireflyIII\Handlers\Observer\AttachmentObserver;
+use FireflyIII\Handlers\Observer\BillObserver;
+use FireflyIII\Handlers\Observer\BudgetObserver;
+use FireflyIII\Handlers\Observer\CategoryObserver;
+use FireflyIII\Handlers\Observer\PiggyBankObserver;
+use FireflyIII\Handlers\Observer\RecurrenceObserver;
+use FireflyIII\Handlers\Observer\RecurrenceTransactionObserver;
+use FireflyIII\Handlers\Observer\RuleGroupObserver;
+use FireflyIII\Handlers\Observer\RuleObserver;
+use FireflyIII\Handlers\Observer\TagObserver;
+use FireflyIII\Handlers\Observer\TransactionGroupObserver;
+use FireflyIII\Handlers\Observer\TransactionJournalObserver;
+use FireflyIII\Handlers\Observer\TransactionObserver;
+use FireflyIII\Handlers\Observer\WebhookMessageObserver;
+use FireflyIII\Handlers\Observer\WebhookObserver;
+use FireflyIII\Models\Account;
+use FireflyIII\Models\Attachment;
+use FireflyIII\Models\Bill;
+use FireflyIII\Models\Budget;
+use FireflyIII\Models\Category;
 use FireflyIII\Models\PiggyBank;
-use FireflyIII\Models\PiggyBankRepetition;
-use FireflyIII\Repositories\Budget\AvailableBudgetRepositoryInterface;
-use FireflyIII\Repositories\Budget\BudgetLimitRepositoryInterface;
+use FireflyIII\Models\Recurrence;
+use FireflyIII\Models\RecurrenceTransaction;
+use FireflyIII\Models\Rule;
+use FireflyIII\Models\RuleGroup;
+use FireflyIII\Models\Tag;
+use FireflyIII\Models\Transaction;
+use FireflyIII\Models\TransactionGroup;
+use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Models\Webhook;
+use FireflyIII\Models\WebhookMessage;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Laravel\Passport\Events\AccessTokenCreated;
-use Log;
 
 /**
  * Class EventServiceProvider.
  *
- * @codeCoverageIgnore
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
 class EventServiceProvider extends ServiceProvider
 {
-    /**
-     * The event listener mappings for the application.
-     *
-     * @var array
-     */
     protected $listen
         = [
             // is a User related event.
@@ -157,8 +183,27 @@ class EventServiceProvider extends ServiceProvider
                 'FireflyIII\Handlers\Events\AuditEventHandler@storeAuditEvent',
             ],
             // piggy bank related events:
-            ChangedPiggyBankAmount::class       => [
-                'FireflyIII\Handlers\Events\PiggyBankEventHandler@changePiggyAmount',
+            ChangedAmount::class                => [
+                'FireflyIII\Handlers\Events\Model\PiggyBankEventHandler@changePiggyAmount',
+            ],
+
+            // budget related events: CRUD budget limit
+            Created::class                      => [
+                'FireflyIII\Handlers\Events\Model\BudgetLimitHandler@created',
+            ],
+            Updated::class                      => [
+                'FireflyIII\Handlers\Events\Model\BudgetLimitHandler@updated',
+            ],
+            Deleted::class                      => [
+                'FireflyIII\Handlers\Events\Model\BudgetLimitHandler@deleted',
+            ],
+
+            // rule actions
+            RuleActionFailedOnArray::class      => [
+                'FireflyIII\Handlers\Events\Model\RuleHandler@ruleActionFailedOnArray',
+            ],
+            RuleActionFailedOnObject::class     => [
+                'FireflyIII\Handlers\Events\Model\RuleHandler@ruleActionFailedOnObject',
             ],
         ];
 
@@ -167,78 +212,26 @@ class EventServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        parent::boot();
-        $this->registerCreateEvents();
-        $this->registerBudgetEvents();
+        $this->registerObservers();
     }
 
-    /**
-     * TODO needs a dedicated (static) method.
-     */
-    protected function registerCreateEvents(): void
+    private function registerObservers(): void
     {
-        PiggyBank::created(
-            static function (PiggyBank $piggyBank) {
-                $repetition = new PiggyBankRepetition();
-                $repetition->piggyBank()->associate($piggyBank);
-                $repetition->startdate     = $piggyBank->startdate;
-                $repetition->targetdate    = $piggyBank->targetdate;
-                $repetition->currentamount = 0;
-                $repetition->save();
-            }
-        );
-    }
-
-    /**
-     * TODO needs a dedicated method.
-     */
-    protected function registerBudgetEvents(): void
-    {
-        $func = static function (BudgetLimit $limit) {
-            Log::debug('Trigger budget limit event.');
-            // find available budget with same period and same currency or create it.
-            // then set it or add money:
-            $user            = $limit->budget->user;
-            $availableBudget = $user
-                ->availableBudgets()
-                ->where('start_date', $limit->start_date->format('Y-m-d'))
-                ->where('end_date', $limit->end_date->format('Y-m-d'))
-                ->where('transaction_currency_id', $limit->transaction_currency_id)
-                ->first();
-            // update!
-            if (null !== $availableBudget) {
-                $repository = app(BudgetLimitRepositoryInterface::class);
-                $repository->setUser($user);
-                $set = $repository->getAllBudgetLimitsByCurrency($limit->transactionCurrency, $limit->start_date, $limit->end_date);
-                $sum = (string)$set->sum('amount');
-
-
-                Log::debug(
-                    sprintf(
-                        'Because budget limit #%d had its amount changed to %s, available budget limit #%d will be updated.',
-                        $limit->id,
-                        $limit->amount,
-                        $availableBudget->id
-                    )
-                );
-                $availableBudget->amount = $sum;
-                $availableBudget->save();
-                return;
-            }
-            Log::debug('Does not exist, create it.');
-            // create it.
-            $data       = [
-                'amount'      => $limit->amount,
-                'start'       => $limit->start_date,
-                'end'         => $limit->end_date,
-                'currency_id' => $limit->transaction_currency_id,
-            ];
-            $repository = app(AvailableBudgetRepositoryInterface::class);
-            $repository->setUser($user);
-            $repository->store($data);
-        };
-
-        BudgetLimit::created($func);
-        BudgetLimit::updated($func);
+        Attachment::observe(new AttachmentObserver());
+        PiggyBank::observe(new PiggyBankObserver());
+        Account::observe(new AccountObserver());
+        Bill::observe(new BillObserver());
+        Budget::observe(new BudgetObserver());
+        Category::observe(new CategoryObserver());
+        Recurrence::observe(new RecurrenceObserver());
+        RecurrenceTransaction::observe(new RecurrenceTransactionObserver());
+        Rule::observe(new RuleObserver());
+        RuleGroup::observe(new RuleGroupObserver());
+        Tag::observe(new TagObserver());
+        Transaction::observe(new TransactionObserver());
+        TransactionJournal::observe(new TransactionJournalObserver());
+        TransactionGroup::observe(new TransactionGroupObserver());
+        Webhook::observe(new WebhookObserver());
+        WebhookMessage::observe(new WebhookMessageObserver());
     }
 }

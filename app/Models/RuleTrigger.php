@@ -23,25 +23,28 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
 use Eloquent;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * FireflyIII\Models\RuleTrigger
  *
- * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property int $rule_id
- * @property string $trigger_type
- * @property string $trigger_value
- * @property int $order
- * @property bool $active
- * @property bool $stop_processing
- * @property-read Rule $rule
+ * @property int         $id
+ * @property null|Carbon $created_at
+ * @property null|Carbon $updated_at
+ * @property int         $rule_id
+ * @property null|string $trigger_type
+ * @property null|string $trigger_value
+ * @property int         $order
+ * @property bool        $active
+ * @property bool        $stop_processing
+ * @property Rule        $rule
+ *
  * @method static Builder|RuleTrigger newModelQuery()
  * @method static Builder|RuleTrigger newQuery()
  * @method static Builder|RuleTrigger query()
@@ -54,17 +57,15 @@ use Illuminate\Support\Carbon;
  * @method static Builder|RuleTrigger whereTriggerType($value)
  * @method static Builder|RuleTrigger whereTriggerValue($value)
  * @method static Builder|RuleTrigger whereUpdatedAt($value)
+ *
  * @mixin Eloquent
  */
 class RuleTrigger extends Model
 {
-    /**
-     * The attributes that should be casted to native types.
-     *
-     * @var array
-     */
+    use ReturnsIntegerIdTrait;
+
     protected $casts
-        = [
+                        = [
             'created_at'      => 'datetime',
             'updated_at'      => 'datetime',
             'active'          => 'boolean',
@@ -72,15 +73,24 @@ class RuleTrigger extends Model
             'stop_processing' => 'boolean',
         ];
 
-    /** @var array Fields that can be filled */
     protected $fillable = ['rule_id', 'trigger_type', 'trigger_value', 'order', 'active', 'stop_processing'];
 
-    /**
-     * @codeCoverageIgnore
-     * @return BelongsTo
-     */
     public function rule(): BelongsTo
     {
         return $this->belongsTo(Rule::class);
+    }
+
+    protected function order(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
+    }
+
+    protected function ruleId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value) => (int)$value,
+        );
     }
 }
